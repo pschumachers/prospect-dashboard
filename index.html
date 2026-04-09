@@ -92,6 +92,21 @@ const extractJSON = (raw) => {
   }
   throw new Error("No valid JSON found in API response");
 };
+const fetchWithRetry = async (url, options, maxRetries, statusCb) => {
+  for (var attempt = 0; attempt <= maxRetries; attempt++) {
+    var resp = await fetch(url, options);
+    if (resp.ok) return resp;
+    if (resp.status === 529 || resp.status === 529 || resp.status === 503 || resp.status === 429) {
+      if (attempt < maxRetries) {
+        var wait = Math.min(2000 * Math.pow(2, attempt), 15000);
+        if (statusCb) statusCb("API busy ("+resp.status+"), retrying in " + Math.round(wait/1000) + "s... (attempt " + (attempt+2) + "/" + (maxRetries+1) + ")");
+        await new Promise(function(r) { setTimeout(r, wait); });
+        continue;
+      }
+    }
+    throw new Error("API error: " + resp.status);
+  }
+};
 // ─── Login Page Component ────────────────────────────────────────────────────
 function LoginPage({ onLogin }) {
   const [email, setEmail] = useState("");
@@ -11686,12 +11701,11 @@ function BUGrowthPhenomSection({ account, update, claudeApiKey }) {
     if (!claudeApiKey) { alert("Set your API key first"); return; }
     setEnriching(true); setEnrichStatus("Analyzing fastest-growing BU and Phenom product fit...");
     try {
-      var resp = await fetch("https://api.anthropic.com/v1/messages", {
+      var resp = await fetchWithRetry("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-api-key": claudeApiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
         body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 4000, system: "You are a JSON API endpoint. You ONLY output valid JSON objects. Never include any text, explanation, or commentary outside the JSON.", messages: [{ role: "user", content: "Research \"" + account.companyName + "\" (" + (account.industry || "unknown") + "). Today is " + new Date().toISOString().split("T")[0] + ". Use ONLY current-year data and publicly available information.\n\nDEEP ACCOUNT INTELLIGENCE ALREADY GATHERED:\n- At a Glance: " + safeStr(account.atAGlance).substring(0, 400) + "\n- Business Segments: " + safeStr(account.businessSegments).substring(0, 400) + "\n- CEO Priorities: " + safeStr(account.ceoPriorities).substring(0, 300) + "\n- Revenue & Growth: " + safeStr(account.revenueGrowth).substring(0, 300) + "\n- Strategy: " + safeStr(account.strategy).substring(0, 300) + "\n- Key Signals: " + safeStr(account.keySignals).substring(0, 400) + "\n- Challenges: " + safeStr(account.challenges).substring(0, 400) + "\n- Workforce Strategy: " + safeStr(account.workforceStrategy).substring(0, 300) + "\n- Hiring Trends: " + safeStr(account.hiringTrends).substring(0, 300) + "\n- Employees: " + safeStr(account.employees) + "\n- Open Roles: " + safeStr(account.openRoles) + "\n- Problems: " + safeStr(account.problems).substring(0, 300) + "\n- Use Cases: " + safeStr(account.useCases).substring(0, 300) + "\n\nIMPORTANT: Cross-reference ALL the above intelligence. Your BU analysis must be CONSISTENT with the challenges, strategy, and signals already identified. Reference specific facts from this intelligence to ground your analysis.\n\nPhenom's products: TXM (talent marketplace, career site, CRM, chatbot, internal mobility), Hiring Manager (AI job reqs, interview intelligence, candidate scoring), Employee Experience (career pathing, gigs marketplace, skills matching), Recruiter (AI sourcing, screening, pipeline nurturing, diversity analytics), Analytics (talent dashboards, predictive analytics, workforce planning), High-Volume Hiring (scheduling, SMS, chatbot screening), Campus (university recruiting, events), Contingent (contract workforce).\n\nReturn this exact JSON structure:\n{\n  \"fastestGrowingBU\": \"Name the SPECIFIC fastest-growing BU at " + account.companyName + " with growth rate, revenue, and strategic importance. Must be grounded in their actual publicly reported segments and strategy.\",\n  \"buGrowthDrivers\": \"What drives this BU's growth — cite specific recent acquisitions, product launches, or market moves from " + new Date().getFullYear() + ". Connect to the key signals and strategy above.\",\n  \"buTalentNeeds\": \"What talent this BU urgently needs — specific roles, volumes, skill sets. Reference their actual open roles and hiring trends above.\",\n  \"phenomProductMatch\": \"Map 4-5 SPECIFIC Phenom products to THIS company's SPECIFIC challenges listed above: '[Product] → [Their specific challenge/use case] → [Expected impact with numbers]'\",\n  \"phenomQuickWins\": \"3 concrete things Phenom delivers in FIRST 90 DAYS that directly address the challenges identified above. Include timelines and metrics.\",\n  \"phenomROIStory\": \"12-month ROI narrative using their actual employee count (" + safeStr(account.employees) + ") and open roles (" + safeStr(account.openRoles) + "). Be specific with $ amounts.\",\n  \"wowInsights\": \"5 jaw-drop insights that connect dots across the intelligence above in ways the CHRO wouldn't expect — each 2-3 sentences with specific data from their public filings, earnings calls, or news. Include: (1) recent event most missed, (2) competitive threat to their talent brand, (3) hidden cost they're not tracking, (4) connection between two of their initiatives creating urgency, (5) prediction for next 6-12 months\"\n}" }, { role: "assistant", content: "{" }] }),
-      });
-      if (!resp.ok) throw new Error("API error: " + resp.status);
+      }, 3, function(msg) { setEnrichStatus(msg); });
       var data = await resp.json();
       var rawText = "{" + (data.content[0].text || "");
       var parsed = extractJSON(rawText);
@@ -11763,12 +11777,11 @@ function BULeadersSection({ account, update, claudeApiKey }) {
     if (!claudeApiKey) { alert("Set your API key first"); return; }
     setEnriching(true); setEnrichStatus("Researching BU leaders...");
     try {
-      var resp = await fetch("https://api.anthropic.com/v1/messages", {
+      var resp = await fetchWithRetry("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-api-key": claudeApiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
-        body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 3000, system: "You are a JSON API endpoint. You ONLY output valid JSON objects. Never include any text, explanation, or commentary outside the JSON. Start your response with { and end with }.", messages: [{ role: "user", content: "Research current Business Unit leaders at \"" + account.companyName + "\" (" + (account.industry || "unknown") + "). Today is " + new Date().toISOString().split("T")[0] + ".\n\nInclude: division/BU heads, SVPs running business lines, procurement/vendor management leaders, and anyone with P&L responsibility. If you cannot verify a person, use your best knowledge but note it.\n\nReturn this exact JSON structure:\n{\"buLeaders\": [{\"name\": \"Full name\", \"title\": \"Current title\", \"bu\": \"Business Unit name\", \"mandate\": \"Their strategic mandate\", \"talentChallenge\": \"Their hiring challenge\", \"phenomAngle\": \"How to position Phenom\", \"linkedinUrl\": \"\"}]}" }, { role: "assistant", content: "{" }] }),
-      });
-      if (!resp.ok) throw new Error("API error: " + resp.status);
+        body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 3000, system: "You are a JSON API endpoint. You ONLY output valid JSON objects. Never include any text, explanation, or commentary outside the JSON.", messages: [{ role: "user", content: "Research current Business Unit leaders at \"" + account.companyName + "\" (" + (account.industry || "unknown") + "). Today is " + new Date().toISOString().split("T")[0] + ".\n\nInclude: division/BU heads, SVPs running business lines, procurement/vendor management leaders, and anyone with P&L responsibility. If you cannot verify a person, use your best knowledge but note it.\n\nReturn this exact JSON structure:\n{\"buLeaders\": [{\"name\": \"Full name\", \"title\": \"Current title\", \"bu\": \"Business Unit name\", \"mandate\": \"Their strategic mandate\", \"talentChallenge\": \"Their hiring challenge\", \"phenomAngle\": \"How to position Phenom\", \"linkedinUrl\": \"\"}]}" }, { role: "assistant", content: "{" }] }),
+      }, 3, function(msg) { setEnrichStatus(msg); });
       var data = await resp.json();
       var rawText = "{" + (data.content[0].text || "");
       var parsed = extractJSON(rawText);
@@ -12784,13 +12797,12 @@ function ProspectDashboard() {
     };
   }, []);
 
-  const callClaudeAPI = async (key, prompt, maxTokens) => {
-    const resp = await fetch("https://api.anthropic.com/v1/messages", {
+  const callClaudeAPI = async (key, prompt, maxTokens, statusCb) => {
+    const resp = await fetchWithRetry("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
       body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: maxTokens || 2000, system: "You are a JSON API endpoint. You ONLY output valid JSON objects. Never include any text, explanation, or commentary outside the JSON.", messages: [{ role: "user", content: prompt }, { role: "assistant", content: "{" }] })
-    });
-    if (!resp.ok) { const e = await resp.text(); throw new Error(`HTTP ${resp.status}: ${e.substring(0, 200)}`); }
+    }, 3, statusCb);
     const data = await resp.json();
     if (data.error) throw new Error(data.error.message || JSON.stringify(data.error).substring(0, 200));
     if (!data.content || !data.content[0]) throw new Error("Empty response from API");
@@ -13596,6 +13608,31 @@ Return this exact JSON structure:
           style: { fontSize: 14, padding: "5px 4px", opacity: syncStatus === "saving" ? 0.5 : 1, transition: "opacity 0.3s", cursor: syncStatus === "error" ? "pointer" : "default" },
           onClick: syncStatus === "error" ? () => { setSaveError(""); saveToCloud(accounts); } : undefined,
         }, syncStatus === "error" ? "\u26A0\uFE0F" : syncStatus === "saving" ? "\u2601\uFE0F" : syncStatus === "synced" ? "\u2705" : syncStatus === "loading" ? "\u23F3" : "\uD83D\uDCBE"),
+        /*#__PURE__*/ React.createElement(
+          "button",
+          {
+            onClick: () => { saveToCloud(accounts); },
+            title: "Save all data to cloud now",
+            style: {
+              background: syncStatus === "saving" ? "#9CA3AF" : "linear-gradient(135deg, #0D9488, #14B8A6)",
+              border: "none",
+              borderRadius: 6,
+              color: "#fff",
+              cursor: syncStatus === "saving" ? "not-allowed" : "pointer",
+              fontSize: 11,
+              padding: "5px 12px",
+              fontFamily: "inherit",
+              fontWeight: 700,
+              minHeight: 36,
+              whiteSpace: "nowrap",
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+            },
+            disabled: syncStatus === "saving",
+          },
+          syncStatus === "saving" ? "\u23F3 Saving..." : "\uD83D\uDCBE Save"
+        ),
         /*#__PURE__*/ React.createElement(
           "button",
           {
