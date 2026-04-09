@@ -63,7 +63,10 @@
 const { useState, useCallback, useEffect, useRef } = React; // ─── Firebase references (initialized in head) ─────────────────────────────
 const auth = __fb_auth;
 const db = __fb_db;
-const firebaseAvailable = __fb_available; // ─── Login Page Component ────────────────────────────────────────────────────
+const firebaseAvailable = __fb_available;
+// Safe string coerce — handles arrays, objects, null, undefined
+const safeStr = (v) => { if (v == null) return ""; if (typeof v === "string") return v; if (Array.isArray(v)) return v.join(", "); if (typeof v === "object") return JSON.stringify(v); return String(v); };
+// ─── Login Page Component ────────────────────────────────────────────────────
 function LoginPage({ onLogin }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -7843,12 +7846,12 @@ function ExecutiveBriefSection({ account, update, claudeApiKey }) {
     try {
       const context = {
         companyName: account.companyName || "", industry: account.industry || "", employees: account.employees || "",
-        revenue: account.revenue || "", existingBrief: (account.atAGlance || "").substring(0, 500),
-        hypothesis: (account.hypothesis || "").substring(0, 300), keySignals: (account.keySignals || []).slice(0, 8),
-        workforceScale: (account.workforceScale || "").substring(0, 300),
-        businessPain: (account.businessPain || "").substring(0, 300),
-        whyNow: (account.whyNow || "").substring(0, 300),
-        transcriptNotes: (account.transcriptNotes || "").substring(0, 300),
+        revenue: account.revenue || "", existingBrief: safeStr(account.atAGlance).substring(0, 500),
+        hypothesis: safeStr(account.hypothesis).substring(0, 300), keySignals: (account.keySignals || []).slice(0, 8),
+        workforceScale: safeStr(account.workforceScale).substring(0, 300),
+        businessPain: safeStr(account.businessPain).substring(0, 300),
+        whyNow: safeStr(account.whyNow).substring(0, 300),
+        transcriptNotes: safeStr(account.transcriptNotes).substring(0, 300),
         hyperCellTitle: account.hyperCellTitle || "",
       };
       const prompt = "You are a senior sales intelligence analyst. For \"" + context.companyName + "\", create a comprehensive executive brief by synthesising ALL available intelligence. Use public data, Phenom workforce frameworks, and any existing account data. CONTEXT:\n" + JSON.stringify(context) + "\n\nReturn ONLY valid JSON:\n" + JSON.stringify({
@@ -8285,6 +8288,7 @@ function SectionFileUpload({ label, icon, claudeApiKey, prompt, onResult }) {
         if (data.error) throw new Error(data.error.message);
         let text = data.content[0].text.trim();
         if (text.startsWith("\`\`\`")) text = text.replace(/^\`\`\`(?:json)?\n?/, "").replace(/\n?\`\`\`$/, "").trim();
+        var _js = text.indexOf("{"); var _je = text.lastIndexOf("}"); if (_js >= 0 && _je > _js) text = text.substring(_js, _je + 1);
         const result = JSON.parse(text);
         onResult(result, file.name);
         setStatus("\u2705 Extracted from " + file.name);
@@ -8307,6 +8311,7 @@ function SectionFileUpload({ label, icon, claudeApiKey, prompt, onResult }) {
       if (data.error) throw new Error(data.error.message);
       let text = data.content[0].text.trim();
       if (text.startsWith("\`\`\`")) text = text.replace(/^\`\`\`(?:json)?\n?/, "").replace(/\n?\`\`\`$/, "").trim();
+      var _js = text.indexOf("{"); var _je = text.lastIndexOf("}"); if (_js >= 0 && _je > _js) text = text.substring(_js, _je + 1);
       const result = JSON.parse(text);
       onResult(result, file.name);
       setStatus("\u2705 Extracted from " + file.name);
@@ -8713,6 +8718,7 @@ function ExecutiveMappingSection({ account, update, claudeApiKey }) {
       if (data.error) throw new Error(data.error.message);
       let text = data.content[0].text.trim();
       if (text.startsWith("\`\`\`")) text = text.replace(/^\`\`\`(?:json)?\n?/, "").replace(/\n?\`\`\`$/, "").trim();
+      var _js = text.indexOf("{"); var _je = text.lastIndexOf("}"); if (_js >= 0 && _je > _js) text = text.substring(_js, _je + 1);
       const result = JSON.parse(text);
       const updated = [...team];
       const current = { ...updated[i] };
@@ -8750,6 +8756,7 @@ function ExecutiveMappingSection({ account, update, claudeApiKey }) {
       if (data.error) throw new Error(data.error.message);
       let text = data.content[0].text.trim();
       if (text.startsWith("\`\`\`")) text = text.replace(/^\`\`\`(?:json)?\n?/, "").replace(/\n?\`\`\`$/, "").trim();
+      var _js = text.indexOf("{"); var _je = text.lastIndexOf("}"); if (_js >= 0 && _je > _js) text = text.substring(_js, _je + 1);
       const result = JSON.parse(text);
       if (result.teamMembers && result.teamMembers.length > 0) {
         const existing = [...team];
@@ -8836,6 +8843,7 @@ function ExecutiveMappingSection({ account, update, claudeApiKey }) {
       if (data.error) throw new Error(data.error.message);
       let text = data.content[0].text.trim();
       if (text.startsWith("\`\`\`")) text = text.replace(/^\`\`\`(?:json)?\n?/, "").replace(/\n?\`\`\`$/, "").trim();
+      var _js = text.indexOf("{"); var _je = text.lastIndexOf("}"); if (_js >= 0 && _je > _js) text = text.substring(_js, _je + 1);
       const result = JSON.parse(text);
 
       // Update only empty/blank fields — preserve anything user already filled in
@@ -8903,6 +8911,7 @@ CRITICAL RULES:
       if (data.error) throw new Error(data.error.message);
       let text = data.content[0].text.trim();
       if (text.startsWith("```")) text = text.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "").trim();
+      var _js = text.indexOf("{"); var _je = text.lastIndexOf("}"); if (_js >= 0 && _je > _js) text = text.substring(_js, _je + 1);
       const result = JSON.parse(text);
       if (result.leaders && result.leaders.length > 0) {
         const merged = [...account.executives];
@@ -9675,7 +9684,7 @@ function HyperCellSection({ account, update, claudeApiKey }) {
     if (!claudeApiKey) { alert("Set your API key first"); return; }
     setEnriching(true); setEnrichStatus("Identifying Phenom hyper-cell opportunity...");
     try {
-      const context = { companyName: account.companyName || "", industry: account.industry || "", employees: account.employees || "", workforceScale: (account.workforceScale || "").substring(0, 500), criticalRoles: (account.criticalRoles || "").substring(0, 300), businessPain: (account.businessPain || "").substring(0, 300), whyNow: (account.whyNow || "").substring(0, 300), existingTitle: account.hyperCellTitle || "", existingNarrative: (account.hyperCellNarrative || "").substring(0, 500) };
+      const context = { companyName: account.companyName || "", industry: account.industry || "", employees: account.employees || "", workforceScale: safeStr(account.workforceScale).substring(0, 500), criticalRoles: safeStr(account.criticalRoles).substring(0, 300), businessPain: safeStr(account.businessPain).substring(0, 300), whyNow: safeStr(account.whyNow).substring(0, 300), existingTitle: account.hyperCellTitle || "", existingNarrative: safeStr(account.hyperCellNarrative).substring(0, 500) };
       const prompt = "You are a Phenom strategic sales advisor. For \"" + context.companyName + "\", identify THE single highest-value Phenom opportunity — the executive-level entry point. CONTEXT:\n" + JSON.stringify(context) + "\n\nReturn ONLY valid JSON:\n{\"hyperCellTitle\": \"One-sentence Phenom opportunity title\", \"hyperCellNarrative\": \"3-4 paragraph executive narrative: business context, urgency driver, specific Phenom solution (name the module), quantified expected impact (use real Phenom benchmarks), competitive urgency, and the executive ask. This must be compelling enough for a C-suite conversation.\"}\n\nUse real Phenom data: 37% internal hires, 50% TTF reduction, 3x career site conversion, 11x internal mobility, AI Agents screening 80%+ candidates, Talent Marketplace reducing external hiring costs 20-30%, Workforce Intelligence enabling skills-based planning 18 months ahead. Reference the specific Phenom module that maps to their #1 pain.";
       const resp = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -10380,17 +10389,17 @@ function CampaignSection({ account, update, claudeApiKey }) {
       const context = {
         company: account.companyName,
         industry: account.industry,
-        overview: (account.atAGlance || "").substring(0, 300),
-        priorities: (account.ceoPriorities || "").substring(0, 300),
-        painPoints: (account.businessPain || "").substring(0, 300),
-        whyNow: (account.whyNow || "").substring(0, 200),
-        hypothesis: (account.hypothesis || "").substring(0, 300),
-        techStack: (account.workflowAssessment || "").substring(0, 200),
+        overview: safeStr(account.atAGlance).substring(0, 300),
+        priorities: safeStr(account.ceoPriorities).substring(0, 300),
+        painPoints: safeStr(account.businessPain).substring(0, 300),
+        whyNow: safeStr(account.whyNow).substring(0, 200),
+        hypothesis: safeStr(account.hypothesis).substring(0, 300),
+        techStack: safeStr(account.workflowAssessment).substring(0, 200),
         hrTools: (account.hrTechStack || []).map(t => t.name).join(", "),
         challenges: (account.challenges || []).map(c => c.title + ": " + c.businessChallenge).join("; ").substring(0, 300),
-        proofPoints: (account.proofPoints || "").substring(0, 200),
+        proofPoints: safeStr(account.proofPoints).substring(0, 200),
         signals: (account.keySignals || []).slice(0, 5).join("; "),
-        gongNotes: (account.transcriptNotes || "").substring(0, 300),
+        gongNotes: safeStr(account.transcriptNotes).substring(0, 300),
       };
       const personContext = person.type === "exec"
         ? "Executive: " + person.name + " | Title: " + (person.title || "Unknown") + " | Department: " + (person.department || "Unknown") + " | Priorities: " + (person.priorities || "Unknown") + " | Background: " + (person.background || "Unknown") + " | Relevance: " + (person.relevance || "") + " | Outreach Angles: " + (person.outreachAngles || "")
@@ -10424,6 +10433,7 @@ function CampaignSection({ account, update, claudeApiKey }) {
       if (data.error) throw new Error(data.error.message);
       let text = data.content[0].text.trim();
       if (text.startsWith("\`\`\`")) text = text.replace(/^\`\`\`(?:json)?\n?/, "").replace(/\n?\`\`\`$/, "").trim();
+      var _js = text.indexOf("{"); var _je = text.lastIndexOf("}"); if (_js >= 0 && _je > _js) text = text.substring(_js, _je + 1);
       const campaign = JSON.parse(text);
       campaign.generatedAt = new Date().toISOString();
 
@@ -11528,10 +11538,10 @@ Industry: ${account.industry}
 Stage: ${account.stage}
 Priority: ${account.priority}
 Key Sponsor: ${account.primarySponsor}
-Business Pain: ${(account.businessPain || "").substring(0, 300)}
-Why Now: ${(account.whyNow || "").substring(0, 300)}
-Next Steps (existing): ${(account.nextSteps || "").substring(0, 300)}
-Recent News: ${(account.recentNews || "").substring(0, 200)}
+Business Pain: ${safeStr(account.businessPain).substring(0, 300)}
+Why Now: ${safeStr(account.whyNow).substring(0, 300)}
+Next Steps (existing): ${safeStr(account.nextSteps).substring(0, 300)}
+Recent News: ${safeStr(account.recentNews).substring(0, 200)}
 
 Return ONLY valid JSON array (no markdown):
 [
@@ -11548,6 +11558,7 @@ Return ONLY valid JSON array (no markdown):
       if (data.error) throw new Error(data.error.message);
       let text = data.content[0].text.trim();
       if (text.startsWith("```")) text = text.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "").trim();
+      var _js = text.indexOf("{"); var _je = text.lastIndexOf("}"); if (_js >= 0 && _je > _js) text = text.substring(_js, _je + 1);
       const items = JSON.parse(text);
       const newItems = items.map(it => ({
         id: Date.now() + Math.random(),
@@ -11674,6 +11685,11 @@ function BUGrowthPhenomSection({ account, update, claudeApiKey }) {
       var data = await resp.json();
       var text = (data.content[0].text || "").trim();
       if (text.startsWith("```")) text = text.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "").trim();
+      // Robust JSON extraction: find first { and last }
+      var jsonStart = text.indexOf("{");
+      var jsonEnd = text.lastIndexOf("}");
+      if (jsonStart === -1 || jsonEnd === -1 || jsonEnd <= jsonStart) throw new Error("No JSON object found in response");
+      text = text.substring(jsonStart, jsonEnd + 1);
       var parsed = JSON.parse(text);
       var fields = ["fastestGrowingBU", "buGrowthDrivers", "buTalentNeeds", "phenomProductMatch", "phenomQuickWins", "phenomROIStory", "wowInsights"];
       fields.forEach(function(f) {
@@ -11752,6 +11768,11 @@ function BULeadersSection({ account, update, claudeApiKey }) {
       var data = await resp.json();
       var text = (data.content[0].text || "").trim();
       if (text.startsWith("```")) text = text.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "").trim();
+      // Robust JSON extraction: find first { and last }
+      var jsonStart = text.indexOf("{");
+      var jsonEnd = text.lastIndexOf("}");
+      if (jsonStart === -1 || jsonEnd === -1 || jsonEnd <= jsonStart) throw new Error("No JSON object found in response");
+      text = text.substring(jsonStart, jsonEnd + 1);
       var parsed = JSON.parse(text);
       if (parsed.buLeaders && Array.isArray(parsed.buLeaders)) {
         var existing = [...leaders];
@@ -12777,6 +12798,10 @@ function ProspectDashboard() {
     if (!data.content || !data.content[0]) throw new Error("Empty response from API");
     let text = data.content[0].text.trim();
     if (text.startsWith("```")) text = text.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "").trim();
+    // Robust JSON extraction: find the JSON object even if wrapped in conversational text
+    const jStart = text.indexOf("{");
+    const jEnd = text.lastIndexOf("}");
+    if (jStart >= 0 && jEnd > jStart) text = text.substring(jStart, jEnd + 1);
     return JSON.parse(text);
   };
 
