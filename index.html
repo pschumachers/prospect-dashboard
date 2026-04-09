@@ -11689,11 +11689,12 @@ function BUGrowthPhenomSection({ account, update, claudeApiKey }) {
       var resp = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-api-key": claudeApiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
-        body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 4000, messages: [{ role: "user", content: "You are an elite enterprise sales strategist. Research \"" + account.companyName + "\" (" + (account.industry || "unknown") + "). Today is " + new Date().toISOString().split("T")[0] + ".\n\nContext already known:\n- At a Glance: " + (account.atAGlance || "N/A").substring(0, 300) + "\n- Business Segments: " + (account.businessSegments || "N/A").substring(0, 300) + "\n- CEO Priorities: " + (account.ceoPriorities || "N/A").substring(0, 200) + "\n- Employees: " + (account.employees || "N/A") + "\n- Open Roles: " + (account.openRoles || "N/A") + "\n\nPhenom's products: TXM (talent marketplace, career site, CRM, chatbot, internal mobility), Hiring Manager (AI job reqs, interview intelligence, candidate scoring), Employee Experience (career pathing, gigs marketplace, skills matching), Recruiter (AI sourcing, screening, pipeline nurturing, diversity analytics), Analytics (talent dashboards, predictive analytics, workforce planning), High-Volume Hiring (scheduling, SMS, chatbot screening), Campus (university recruiting, events), Contingent (contract workforce).\n\nReturn ONLY valid JSON:\n{\n  \"fastestGrowingBU\": \"Name the SPECIFIC fastest-growing BU with growth rate, revenue, and strategic importance\",\n  \"buGrowthDrivers\": \"What drives this BU's growth — acquisitions, product launches, market expansion. Cite specific events from last 12 months\",\n  \"buTalentNeeds\": \"What talent this BU urgently needs — specific roles, volumes, skill sets. Reference actual job postings if possible\",\n  \"phenomProductMatch\": \"Map 4-5 SPECIFIC Phenom products to THIS company's needs: '[Product] → [Their specific use case] → [Expected impact with numbers]'\",\n  \"phenomQuickWins\": \"3 concrete things Phenom delivers in FIRST 90 DAYS with timelines and metrics\",\n  \"phenomROIStory\": \"12-month ROI narrative using their actual employee/hiring numbers. Be specific with $ amounts.\",\n  \"wowInsights\": \"5 jaw-drop insights that make their CHRO say 'how do you know that?' — each 2-3 sentences with specific data. Include: (1) recent event most missed, (2) competitive threat to their talent brand, (3) hidden cost they're not tracking, (4) connection between two initiatives creating urgency, (5) prediction for next 6-12 months\"\n}" }] }),
+        body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 4000, system: "You are a JSON API endpoint. You ONLY output valid JSON objects. Never include any text, explanation, or commentary outside the JSON.", messages: [{ role: "user", content: "Research \"" + account.companyName + "\" (" + (account.industry || "unknown") + "). Today is " + new Date().toISOString().split("T")[0] + ". Use ONLY current-year data and publicly available information.\n\nDEEP ACCOUNT INTELLIGENCE ALREADY GATHERED:\n- At a Glance: " + safeStr(account.atAGlance).substring(0, 400) + "\n- Business Segments: " + safeStr(account.businessSegments).substring(0, 400) + "\n- CEO Priorities: " + safeStr(account.ceoPriorities).substring(0, 300) + "\n- Revenue & Growth: " + safeStr(account.revenueGrowth).substring(0, 300) + "\n- Strategy: " + safeStr(account.strategy).substring(0, 300) + "\n- Key Signals: " + safeStr(account.keySignals).substring(0, 400) + "\n- Challenges: " + safeStr(account.challenges).substring(0, 400) + "\n- Workforce Strategy: " + safeStr(account.workforceStrategy).substring(0, 300) + "\n- Hiring Trends: " + safeStr(account.hiringTrends).substring(0, 300) + "\n- Employees: " + safeStr(account.employees) + "\n- Open Roles: " + safeStr(account.openRoles) + "\n- Problems: " + safeStr(account.problems).substring(0, 300) + "\n- Use Cases: " + safeStr(account.useCases).substring(0, 300) + "\n\nIMPORTANT: Cross-reference ALL the above intelligence. Your BU analysis must be CONSISTENT with the challenges, strategy, and signals already identified. Reference specific facts from this intelligence to ground your analysis.\n\nPhenom's products: TXM (talent marketplace, career site, CRM, chatbot, internal mobility), Hiring Manager (AI job reqs, interview intelligence, candidate scoring), Employee Experience (career pathing, gigs marketplace, skills matching), Recruiter (AI sourcing, screening, pipeline nurturing, diversity analytics), Analytics (talent dashboards, predictive analytics, workforce planning), High-Volume Hiring (scheduling, SMS, chatbot screening), Campus (university recruiting, events), Contingent (contract workforce).\n\nReturn this exact JSON structure:\n{\n  \"fastestGrowingBU\": \"Name the SPECIFIC fastest-growing BU at " + account.companyName + " with growth rate, revenue, and strategic importance. Must be grounded in their actual publicly reported segments and strategy.\",\n  \"buGrowthDrivers\": \"What drives this BU's growth — cite specific recent acquisitions, product launches, or market moves from " + new Date().getFullYear() + ". Connect to the key signals and strategy above.\",\n  \"buTalentNeeds\": \"What talent this BU urgently needs — specific roles, volumes, skill sets. Reference their actual open roles and hiring trends above.\",\n  \"phenomProductMatch\": \"Map 4-5 SPECIFIC Phenom products to THIS company's SPECIFIC challenges listed above: '[Product] → [Their specific challenge/use case] → [Expected impact with numbers]'\",\n  \"phenomQuickWins\": \"3 concrete things Phenom delivers in FIRST 90 DAYS that directly address the challenges identified above. Include timelines and metrics.\",\n  \"phenomROIStory\": \"12-month ROI narrative using their actual employee count (" + safeStr(account.employees) + ") and open roles (" + safeStr(account.openRoles) + "). Be specific with $ amounts.\",\n  \"wowInsights\": \"5 jaw-drop insights that connect dots across the intelligence above in ways the CHRO wouldn't expect — each 2-3 sentences with specific data from their public filings, earnings calls, or news. Include: (1) recent event most missed, (2) competitive threat to their talent brand, (3) hidden cost they're not tracking, (4) connection between two of their initiatives creating urgency, (5) prediction for next 6-12 months\"\n}" }, { role: "assistant", content: "{" }] }),
       });
       if (!resp.ok) throw new Error("API error: " + resp.status);
       var data = await resp.json();
-      var parsed = extractJSON(data.content[0].text || "");
+      var rawText = "{" + (data.content[0].text || "");
+      var parsed = extractJSON(rawText);
       var fields = ["fastestGrowingBU", "buGrowthDrivers", "buTalentNeeds", "phenomProductMatch", "phenomQuickWins", "phenomROIStory", "wowInsights"];
       fields.forEach(function(f) {
         if (parsed[f] && parsed[f].length > 5) {
@@ -11765,11 +11766,12 @@ function BULeadersSection({ account, update, claudeApiKey }) {
       var resp = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-api-key": claudeApiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
-        body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 3000, messages: [{ role: "user", content: "Research VERIFIED current Business Unit leaders at \"" + account.companyName + "\" (" + (account.industry || "unknown") + "). Today is " + new Date().toISOString().split("T")[0] + ".\n\nCRITICAL: ONLY include people VERIFIABLY currently employed at " + account.companyName + ". Cross-reference LinkedIn, company website, press releases. Better 3 verified than 8 guessed.\n\nInclude: division/BU heads, SVPs running business lines, procurement/vendor management leaders, and anyone with P&L responsibility. Include at least one procurement/vendor management person if findable.\n\nReturn ONLY valid JSON:\n{\"buLeaders\": [\n  {\"name\": \"Full verified name\", \"title\": \"Exact current title\", \"bu\": \"Business Unit / Division name\", \"mandate\": \"Their strategic mandate and KPIs\", \"talentChallenge\": \"Their specific hiring or talent challenge\", \"phenomAngle\": \"How to position Phenom to this person\", \"linkedinUrl\": \"LinkedIn URL or empty string\"},\n  ...(4-8 leaders including procurement)\n]}" }] }),
+        body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 3000, system: "You are a JSON API endpoint. You ONLY output valid JSON objects. Never include any text, explanation, or commentary outside the JSON. Start your response with { and end with }.", messages: [{ role: "user", content: "Research current Business Unit leaders at \"" + account.companyName + "\" (" + (account.industry || "unknown") + "). Today is " + new Date().toISOString().split("T")[0] + ".\n\nInclude: division/BU heads, SVPs running business lines, procurement/vendor management leaders, and anyone with P&L responsibility. If you cannot verify a person, use your best knowledge but note it.\n\nReturn this exact JSON structure:\n{\"buLeaders\": [{\"name\": \"Full name\", \"title\": \"Current title\", \"bu\": \"Business Unit name\", \"mandate\": \"Their strategic mandate\", \"talentChallenge\": \"Their hiring challenge\", \"phenomAngle\": \"How to position Phenom\", \"linkedinUrl\": \"\"}]}" }, { role: "assistant", content: "{" }] }),
       });
       if (!resp.ok) throw new Error("API error: " + resp.status);
       var data = await resp.json();
-      var parsed = extractJSON(data.content[0].text || "");
+      var rawText = "{" + (data.content[0].text || "");
+      var parsed = extractJSON(rawText);
       if (parsed.buLeaders && Array.isArray(parsed.buLeaders)) {
         var existing = [...leaders];
         var existingNames = existing.map(function(l) { return (l.name || "").toLowerCase(); });
@@ -12786,13 +12788,13 @@ function ProspectDashboard() {
     const resp = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
-      body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: maxTokens || 2000, messages: [{ role: "user", content: prompt }] })
+      body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: maxTokens || 2000, system: "You are a JSON API endpoint. You ONLY output valid JSON objects. Never include any text, explanation, or commentary outside the JSON.", messages: [{ role: "user", content: prompt }, { role: "assistant", content: "{" }] })
     });
     if (!resp.ok) { const e = await resp.text(); throw new Error(`HTTP ${resp.status}: ${e.substring(0, 200)}`); }
     const data = await resp.json();
     if (data.error) throw new Error(data.error.message || JSON.stringify(data.error).substring(0, 200));
     if (!data.content || !data.content[0]) throw new Error("Empty response from API");
-    return extractJSON(data.content[0].text);
+    return extractJSON("{" + data.content[0].text);
   };
 
   const openRefreshSelector = () => {
@@ -12924,34 +12926,54 @@ CRITICAL VERIFICATION RULES:
         const d3 = await callClaudeAPI(key, p3, 3500);
 
         // --- CALL 4: Fastest Growing BU, Phenom Product Match, BU Leaders, Wow Insights ---
-        const p4 = `You are an elite enterprise sales strategist preparing to engage "${acc.companyName}" (industry: ${acc.industry || "unknown"}). Today is ${new Date().toISOString().split("T")[0]}.
+        // Build context from Calls 1-3 results + existing account data for maximum accuracy
+        const c4ctx = {
+          atAGlance: safeStr(d1.atAGlance || acc.atAGlance).substring(0, 300),
+          segments: safeStr(d1.businessSegments || acc.businessSegments).substring(0, 300),
+          ceoPriorities: safeStr(d1.ceoPriorities || acc.ceoPriorities).substring(0, 200),
+          revenue: safeStr(d1.revenueGrowth || acc.revenueGrowth).substring(0, 200),
+          strategy: safeStr(d2.strategy || acc.strategy).substring(0, 200),
+          keySignals: safeStr(d1.keySignals || acc.keySignals).substring(0, 300),
+          challenges: safeStr(d3.challenges || acc.challenges).substring(0, 400),
+          workforce: safeStr(d2.workforceStrategy || acc.workforceStrategy).substring(0, 200),
+          hiring: safeStr(d2.hiringTrends || acc.hiringTrends).substring(0, 200),
+          problems: safeStr(acc.problems).substring(0, 200),
+          useCases: safeStr(acc.useCases).substring(0, 200),
+        };
+        const p4 = `Research "${acc.companyName}" (industry: ${acc.industry || "unknown"}). Today is ${new Date().toISOString().split("T")[0]}. Use ONLY current-year data and publicly verifiable information.
 
-Your goal: arm the salesperson with insights so specific and current that the customer thinks "this person knows our business better than we do." Focus on RECENT moves (last 6-12 months), NAMED business units, NAMED leaders, and SPECIFIC Phenom product capabilities.
+DEEP ACCOUNT INTELLIGENCE ALREADY GATHERED:
+- Overview: ${c4ctx.atAGlance}
+- Business Segments: ${c4ctx.segments}
+- CEO Priorities: ${c4ctx.ceoPriorities}
+- Revenue & Growth: ${c4ctx.revenue}
+- Strategy: ${c4ctx.strategy}
+- Key Signals: ${c4ctx.keySignals}
+- Challenges: ${c4ctx.challenges}
+- Workforce Strategy: ${c4ctx.workforce}
+- Hiring Trends: ${c4ctx.hiring}
+- Employees: ${acc.employees || "N/A"}, Open Roles: ${acc.openRoles || "N/A"}
+- Known Problems: ${c4ctx.problems}
+- Use Cases: ${c4ctx.useCases}
 
-Phenom's product suite includes:
-- Phenom Talent Experience Engine (TXM): AI-powered talent marketplace, career site, CRM, chatbot, internal mobility
-- Phenom Hiring Manager: AI-assisted job req creation, interview intelligence, candidate scoring
-- Phenom Employee Experience: Internal career pathing, gigs/projects marketplace, skills-based talent matching
-- Phenom Recruiter: AI sourcing, automated screening, pipeline nurturing, diversity analytics
-- Phenom Analytics: Talent intelligence dashboards, predictive analytics, workforce planning
-- Phenom High-Volume Hiring: Automated scheduling, SMS campaigns, chatbot screening for hourly/frontline
-- Phenom Campus: University recruiting, event management, early-career pipelines
-- Phenom Contingent: Contract/temp workforce management
+CRITICAL: Cross-reference ALL the above intelligence. Your analysis must be CONSISTENT with the challenges, strategy, signals, and segments above. Reference specific facts to ground every claim.
 
-Return ONLY valid JSON:
+Phenom's products: TXM (talent marketplace, career site, CRM, chatbot, internal mobility), Hiring Manager (AI job reqs, interview intelligence, candidate scoring), Employee Experience (career pathing, gigs marketplace, skills matching), Recruiter (AI sourcing, screening, pipeline nurturing, diversity analytics), Analytics (talent dashboards, predictive analytics, workforce planning), High-Volume Hiring (scheduling, SMS, chatbot screening), Campus (university recruiting, events), Contingent (contract workforce).
+
+Return this exact JSON structure:
 {
-  "fastestGrowingBU": "Name the specific business unit/division growing fastest at ${acc.companyName} right now — include growth rate, revenue contribution, strategic importance. Be specific: 'Cloud Services division grew 34% YoY to $2.1B' not 'their tech division is growing'",
-  "buGrowthDrivers": "What is driving this BU's growth? Market trends, acquisitions, product launches, geographic expansion. Include specific deal wins, product launches, or market moves from the last 12 months",
-  "buTalentNeeds": "What talent does this fastest-growing BU urgently need? Specific roles, skill sets, volume estimates. Connect to hiring data: 'Their cloud unit has 45 open engineering roles on LinkedIn, up 60% QoQ'",
-  "phenomProductMatch": "Map SPECIFIC Phenom products to THIS company's SPECIFIC needs. Format as: '[Phenom Product] → [Company-specific use case] → [Expected impact]. Example: 'Phenom Internal Mobility → Redeploy 200+ displaced workers from restructured Consumer division into growing Cloud BU → save $4M in external hiring, reduce attrition of institutional knowledge'. Give 4-5 specific matches.",
-  "phenomQuickWins": "3 things Phenom can deliver in the FIRST 90 DAYS that create visible impact: e.g. 'Deploy AI career site for their 500+ open roles → 2x application completion rate within 30 days based on similar deployments at [competitor/peer]'. Be concrete with timelines and metrics.",
-  "phenomROIStory": "Build a compelling 12-month ROI narrative specific to this company: 'With ${acc.employees || 'N'} employees and ${acc.openRoles || 'N'} open roles, Phenom projects: X% reduction in time-to-fill (saving $Y), Z% improvement in internal mobility (retaining $W in institutional knowledge), N% increase in application volume through AI career site.' Use their actual numbers.",
-  "wowInsights": "5 'jaw-drop' insights that would make this company's CHRO or CEO say 'how do you know that?'. These should be: (1) A specific recent event most people missed, (2) A competitive threat to their talent brand, (3) A hidden cost they're probably not tracking, (4) A connection between two of their initiatives that creates urgency, (5) A prediction about their next 6-12 months based on signals. Each should be 2-3 sentences and reference specific data points.",
+  "fastestGrowingBU": "Name the SPECIFIC fastest-growing BU at ${acc.companyName} with growth rate, revenue contribution. Must match their actual reported segments above.",
+  "buGrowthDrivers": "What drives this BU's growth — cite specific ${new Date().getFullYear()} events, acquisitions, or launches. Connect to the key signals above.",
+  "buTalentNeeds": "Specific roles, volumes, skill sets this BU needs. Reference their actual open roles (${acc.openRoles || "N/A"}) and hiring trends above.",
+  "phenomProductMatch": "Map 4-5 Phenom products to their SPECIFIC challenges listed above: '[Product] → [Their challenge] → [Expected impact with numbers]'",
+  "phenomQuickWins": "3 things Phenom delivers in FIRST 90 DAYS that directly address the challenges identified above.",
+  "phenomROIStory": "12-month ROI using actual numbers: ${acc.employees || "N"} employees, ${acc.openRoles || "N"} open roles. Specific $ amounts.",
+  "wowInsights": "5 insights connecting dots across the intelligence above that the CHRO wouldn't expect: (1) recent event most missed, (2) competitive talent threat, (3) hidden cost, (4) urgency connection between initiatives, (5) 6-12 month prediction. Each 2-3 sentences with data.",
   "buLeaders": [
-    {"name": "Full name of BU/Division leader (VERIFIED current)", "title": "Exact current title", "bu": "Business Unit name", "mandate": "Their strategic mandate and KPIs", "talentChallenge": "Their specific hiring/talent challenge", "phenomAngle": "How to position Phenom to this person specifically", "linkedinUrl": "LinkedIn URL or empty string"},
-    {"name": "Second BU leader", "title": "Title", "bu": "BU name", "mandate": "Mandate", "talentChallenge": "Challenge", "phenomAngle": "Angle", "linkedinUrl": ""},
-    {"name": "Third BU leader", "title": "Title", "bu": "BU name", "mandate": "Mandate", "talentChallenge": "Challenge", "phenomAngle": "Angle", "linkedinUrl": ""},
-    {"name": "Procurement/Vendor leader if known", "title": "Title", "bu": "Procurement / Vendor Management", "mandate": "Mandate", "talentChallenge": "How they evaluate HR tech vendors", "phenomAngle": "Angle", "linkedinUrl": ""}
+    {"name": "Full name", "title": "Exact current title", "bu": "Business Unit name", "mandate": "Strategic mandate", "talentChallenge": "Hiring challenge", "phenomAngle": "How to position Phenom", "linkedinUrl": ""},
+    {"name": "Second BU leader", "title": "Title", "bu": "BU", "mandate": "Mandate", "talentChallenge": "Challenge", "phenomAngle": "Angle", "linkedinUrl": ""},
+    {"name": "Third leader", "title": "Title", "bu": "BU", "mandate": "Mandate", "talentChallenge": "Challenge", "phenomAngle": "Angle", "linkedinUrl": ""},
+    {"name": "Procurement/Vendor leader", "title": "Title", "bu": "Procurement", "mandate": "Mandate", "talentChallenge": "How they evaluate HR tech", "phenomAngle": "Angle", "linkedinUrl": ""}
   ]
 }`;
         const d4 = await callClaudeAPI(key, p4, 4000);
