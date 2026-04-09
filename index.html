@@ -66,6 +66,32 @@ const db = __fb_db;
 const firebaseAvailable = __fb_available;
 // Safe string coerce — handles arrays, objects, null, undefined
 const safeStr = (v) => { if (v == null) return ""; if (typeof v === "string") return v; if (Array.isArray(v)) return v.join(", "); if (typeof v === "object") return JSON.stringify(v); return String(v); };
+// Robust JSON extraction — finds the largest valid JSON object in a string
+const extractJSON = (raw) => {
+  let text = raw.trim();
+  // Strip markdown code blocks
+  if (text.startsWith("```")) text = text.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "").trim();
+  // Try direct parse first
+  try { return JSON.parse(text); } catch(e) {}
+  // Find balanced JSON object by scanning for { } pairs
+  let bestStart = -1, bestEnd = -1, bestLen = 0;
+  for (let i = 0; i < text.length; i++) {
+    if (text[i] !== "{") continue;
+    let depth = 0, inStr = false, escape = false;
+    for (let j = i; j < text.length; j++) {
+      if (escape) { escape = false; continue; }
+      if (text[j] === "\\") { escape = true; continue; }
+      if (text[j] === '"' && !escape) { inStr = !inStr; continue; }
+      if (inStr) continue;
+      if (text[j] === "{") depth++;
+      if (text[j] === "}") { depth--; if (depth === 0) { if (j - i > bestLen) { bestStart = i; bestEnd = j; bestLen = j - i; } break; } }
+    }
+  }
+  if (bestStart >= 0 && bestEnd > bestStart) {
+    try { return JSON.parse(text.substring(bestStart, bestEnd + 1)); } catch(e) {}
+  }
+  throw new Error("No valid JSON found in API response");
+};
 // ─── Login Page Component ────────────────────────────────────────────────────
 function LoginPage({ onLogin }) {
   const [email, setEmail] = useState("");
@@ -8287,9 +8313,7 @@ function SectionFileUpload({ label, icon, claudeApiKey, prompt, onResult }) {
         const data = await resp.json();
         if (data.error) throw new Error(data.error.message);
         let text = data.content[0].text.trim();
-        if (text.startsWith("\`\`\`")) text = text.replace(/^\`\`\`(?:json)?\n?/, "").replace(/\n?\`\`\`$/, "").trim();
-        var _js = text.indexOf("{"); var _je = text.lastIndexOf("}"); if (_js >= 0 && _je > _js) text = text.substring(_js, _je + 1);
-        const result = JSON.parse(text);
+        const result = extractJSON(text);
         onResult(result, file.name);
         setStatus("\u2705 Extracted from " + file.name);
         setTimeout(() => setStatus(""), 8000);
@@ -8310,9 +8334,7 @@ function SectionFileUpload({ label, icon, claudeApiKey, prompt, onResult }) {
       const data = await resp.json();
       if (data.error) throw new Error(data.error.message);
       let text = data.content[0].text.trim();
-      if (text.startsWith("\`\`\`")) text = text.replace(/^\`\`\`(?:json)?\n?/, "").replace(/\n?\`\`\`$/, "").trim();
-      var _js = text.indexOf("{"); var _je = text.lastIndexOf("}"); if (_js >= 0 && _je > _js) text = text.substring(_js, _je + 1);
-      const result = JSON.parse(text);
+      const result = extractJSON(text);
       onResult(result, file.name);
       setStatus("\u2705 Extracted from " + file.name);
       setTimeout(() => setStatus(""), 8000);
@@ -8717,9 +8739,7 @@ function ExecutiveMappingSection({ account, update, claudeApiKey }) {
       const data = await resp.json();
       if (data.error) throw new Error(data.error.message);
       let text = data.content[0].text.trim();
-      if (text.startsWith("\`\`\`")) text = text.replace(/^\`\`\`(?:json)?\n?/, "").replace(/\n?\`\`\`$/, "").trim();
-      var _js = text.indexOf("{"); var _je = text.lastIndexOf("}"); if (_js >= 0 && _je > _js) text = text.substring(_js, _je + 1);
-      const result = JSON.parse(text);
+      const result = extractJSON(text);
       const updated = [...team];
       const current = { ...updated[i] };
       for (const [field, value] of Object.entries(result)) {
@@ -8755,9 +8775,7 @@ function ExecutiveMappingSection({ account, update, claudeApiKey }) {
       const data = await resp.json();
       if (data.error) throw new Error(data.error.message);
       let text = data.content[0].text.trim();
-      if (text.startsWith("\`\`\`")) text = text.replace(/^\`\`\`(?:json)?\n?/, "").replace(/\n?\`\`\`$/, "").trim();
-      var _js = text.indexOf("{"); var _je = text.lastIndexOf("}"); if (_js >= 0 && _je > _js) text = text.substring(_js, _je + 1);
-      const result = JSON.parse(text);
+      const result = extractJSON(text);
       if (result.teamMembers && result.teamMembers.length > 0) {
         const existing = [...team];
         const existingNames = existing.map(m => (m.name || "").toLowerCase());
@@ -8842,9 +8860,7 @@ function ExecutiveMappingSection({ account, update, claudeApiKey }) {
       const data = await resp.json();
       if (data.error) throw new Error(data.error.message);
       let text = data.content[0].text.trim();
-      if (text.startsWith("\`\`\`")) text = text.replace(/^\`\`\`(?:json)?\n?/, "").replace(/\n?\`\`\`$/, "").trim();
-      var _js = text.indexOf("{"); var _je = text.lastIndexOf("}"); if (_js >= 0 && _je > _js) text = text.substring(_js, _je + 1);
-      const result = JSON.parse(text);
+      const result = extractJSON(text);
 
       // Update only empty/blank fields — preserve anything user already filled in
       const execs = [...account.executives];
@@ -8910,9 +8926,7 @@ CRITICAL RULES:
       const data = await resp.json();
       if (data.error) throw new Error(data.error.message);
       let text = data.content[0].text.trim();
-      if (text.startsWith("```")) text = text.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "").trim();
-      var _js = text.indexOf("{"); var _je = text.lastIndexOf("}"); if (_js >= 0 && _je > _js) text = text.substring(_js, _je + 1);
-      const result = JSON.parse(text);
+      const result = extractJSON(text);
       if (result.leaders && result.leaders.length > 0) {
         const merged = [...account.executives];
         const deletedList = (account._deletedExecs || []).map(n => n.toLowerCase());
@@ -10432,9 +10446,7 @@ function CampaignSection({ account, update, claudeApiKey }) {
       const data = await resp.json();
       if (data.error) throw new Error(data.error.message);
       let text = data.content[0].text.trim();
-      if (text.startsWith("\`\`\`")) text = text.replace(/^\`\`\`(?:json)?\n?/, "").replace(/\n?\`\`\`$/, "").trim();
-      var _js = text.indexOf("{"); var _je = text.lastIndexOf("}"); if (_js >= 0 && _je > _js) text = text.substring(_js, _je + 1);
-      const campaign = JSON.parse(text);
+      const campaign = extractJSON(text);
       campaign.generatedAt = new Date().toISOString();
 
       // Save campaign
@@ -11557,9 +11569,7 @@ Return ONLY valid JSON array (no markdown):
       const data = await resp.json();
       if (data.error) throw new Error(data.error.message);
       let text = data.content[0].text.trim();
-      if (text.startsWith("```")) text = text.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "").trim();
-      var _js = text.indexOf("{"); var _je = text.lastIndexOf("}"); if (_js >= 0 && _je > _js) text = text.substring(_js, _je + 1);
-      const items = JSON.parse(text);
+      const items = extractJSON(text);
       const newItems = items.map(it => ({
         id: Date.now() + Math.random(),
         text: it.text,
@@ -11683,14 +11693,7 @@ function BUGrowthPhenomSection({ account, update, claudeApiKey }) {
       });
       if (!resp.ok) throw new Error("API error: " + resp.status);
       var data = await resp.json();
-      var text = (data.content[0].text || "").trim();
-      if (text.startsWith("```")) text = text.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "").trim();
-      // Robust JSON extraction: find first { and last }
-      var jsonStart = text.indexOf("{");
-      var jsonEnd = text.lastIndexOf("}");
-      if (jsonStart === -1 || jsonEnd === -1 || jsonEnd <= jsonStart) throw new Error("No JSON object found in response");
-      text = text.substring(jsonStart, jsonEnd + 1);
-      var parsed = JSON.parse(text);
+      var parsed = extractJSON(data.content[0].text || "");
       var fields = ["fastestGrowingBU", "buGrowthDrivers", "buTalentNeeds", "phenomProductMatch", "phenomQuickWins", "phenomROIStory", "wowInsights"];
       fields.forEach(function(f) {
         if (parsed[f] && parsed[f].length > 5) {
@@ -11766,14 +11769,7 @@ function BULeadersSection({ account, update, claudeApiKey }) {
       });
       if (!resp.ok) throw new Error("API error: " + resp.status);
       var data = await resp.json();
-      var text = (data.content[0].text || "").trim();
-      if (text.startsWith("```")) text = text.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "").trim();
-      // Robust JSON extraction: find first { and last }
-      var jsonStart = text.indexOf("{");
-      var jsonEnd = text.lastIndexOf("}");
-      if (jsonStart === -1 || jsonEnd === -1 || jsonEnd <= jsonStart) throw new Error("No JSON object found in response");
-      text = text.substring(jsonStart, jsonEnd + 1);
-      var parsed = JSON.parse(text);
+      var parsed = extractJSON(data.content[0].text || "");
       if (parsed.buLeaders && Array.isArray(parsed.buLeaders)) {
         var existing = [...leaders];
         var existingNames = existing.map(function(l) { return (l.name || "").toLowerCase(); });
@@ -12796,13 +12792,7 @@ function ProspectDashboard() {
     const data = await resp.json();
     if (data.error) throw new Error(data.error.message || JSON.stringify(data.error).substring(0, 200));
     if (!data.content || !data.content[0]) throw new Error("Empty response from API");
-    let text = data.content[0].text.trim();
-    if (text.startsWith("```")) text = text.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "").trim();
-    // Robust JSON extraction: find the JSON object even if wrapped in conversational text
-    const jStart = text.indexOf("{");
-    const jEnd = text.lastIndexOf("}");
-    if (jStart >= 0 && jEnd > jStart) text = text.substring(jStart, jEnd + 1);
-    return JSON.parse(text);
+    return extractJSON(data.content[0].text);
   };
 
   const openRefreshSelector = () => {
