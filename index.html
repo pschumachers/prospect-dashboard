@@ -520,287 +520,1842 @@ function dlBlob(blob, filename) {
     alert("Download could not start automatically. Error: " + err.message);
   }
 }
-const PPTX_CDN = "https://cdnjs.cloudflare.com/ajax/libs/PptxGenJS/3.12.0/pptxgen.bundle.js";
+const PPTX_CDN = "https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js";
 const XLSX_CDN = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
 const SEV_COLOR = { CRITICAL: "DC2626", HIGH: "D97706", MEDIUM: "2563EB" };
 async function exportToPPTX(account) {
   await loadScript(PPTX_CDN, "pptx");
-  const PptxGenJS = window.PptxGenJS;
-  const pptx = new PptxGenJS();
-  pptx.layout = "LAYOUT_WIDE";
-  pptx.title = account.companyName || "Account";
-  const TEAL = "00BFA5";
-  const DARK = "1E293B";
-  const MUTED = "6B7280";
-  const WHITE = "FFFFFF";
-  const BG = "F8F9FA";
-  const SLATE = "CBD5E1"; // Slide 1 — Title
-  const s1 = pptx.addSlide();
-  s1.background = { color: DARK };
-  s1.addText(account.companyName || "Account", {
+  if (!window.PptxGenJS) throw new Error("PptxGenJS library not loaded — check internet connection");
+  const pptx = new window.PptxGenJS();
+
+  // Configuration
+  pptx.defineLayout({ name: 'LAYOUT_WIDE', width: 13.33, height: 7.5 });
+  pptx.layout = 'LAYOUT_WIDE';
+  pptx.defaultFont = { name: 'Calibri', size: 11, color: '1E293B' };
+
+  // Brand color
+  const brandColor = (account.brandColor || '1A73E8').toUpperCase();
+  const brandColorLight = tintColor(brandColor, 0.85);
+  const brandColorDark = tintColor(brandColor, -0.3);
+
+  // Helper: Tint a hex color
+  function tintColor(hex, factor) {
+    const r = parseInt(hex.substr(0, 2), 16);
+    const g = parseInt(hex.substr(2, 2), 16);
+    const b = parseInt(hex.substr(4, 2), 16);
+    const nr = Math.round(r + (255 - r) * factor);
+    const ng = Math.round(g + (255 - g) * factor);
+    const nb = Math.round(b + (255 - b) * factor);
+    return nr.toString(16).padStart(2, '0').toUpperCase() +
+           ng.toString(16).padStart(2, '0').toUpperCase() +
+           nb.toString(16).padStart(2, '0').toUpperCase();
+  }
+
+  // Helper: Card shadow options
+  function cardShadow() {
+    return { type: 'outer', blur: 4, offset: 2, angle: 45, color: '000000', opacity: 0.1 };
+  }
+
+  // Helper: Create a tag/badge
+  function createTag(text, maxChars = 20) {
+    return text.length > maxChars ? text.substring(0, maxChars - 1) + '…' : text;
+  }
+
+  // Helper: Truncate text for cards
+  function truncate(text, maxChars = 120) {
+    if (!text) return '';
+    if (text.length > maxChars) return text.substring(0, maxChars) + '…';
+    return text;
+  }
+
+  // Helper: Add tag row to a shape
+  function addTagRow(slide, x, y, tags, brandColor) {
+    const tagArray = Array.isArray(tags) ? tags : [tags];
+    const validTags = tagArray.filter(t => t && typeof t === 'string').slice(0, 3);
+    let tagX = x;
+    validTags.forEach((tag, idx) => {
+      const tagText = createTag(tag, 16);
+      slide.addShape(pptx.ShapeType.rect, {
+        x: tagX,
+        y: y,
+        w: 1.0,
+        h: 0.25,
+        fill: { color: brandColorLight },
+        line: { color: brandColor, width: 0.5 },
+        shadow: cardShadow()
+      });
+      slide.addText(tagText, {
+        x: tagX,
+        y: y,
+        w: 1.0,
+        h: 0.25,
+        fontSize: 8,
+        color: brandColor,
+        align: 'center',
+        valign: 'middle',
+        fontFace: 'Calibri'
+      });
+      tagX += 1.05;
+    });
+  }
+
+  // ========== SLIDE 1: TITLE SLIDE ==========
+  const slide1 = pptx.addSlide();
+
+  // Dark background
+  slide1.background = { color: brandColor };
+
+  // Company name
+  slide1.addText(account.companyName || 'Company', {
     x: 0.5,
-    y: 1.1,
-    w: 12,
-    h: 1.1,
+    y: 2.0,
+    w: 12.33,
+    h: 1.0,
     fontSize: 44,
     bold: true,
-    color: WHITE,
-    fontFace: "Calibri",
+    color: 'FFFFFF',
+    align: 'center',
+    fontFace: 'Calibri'
   });
-  s1.addText(account.industry || "", { x: 0.5, y: 2.3, w: 12, h: 0.5, fontSize: 20, color: TEAL, fontFace: "Calibri" });
-  const meta = [
-    "Revenue: " + (account.revenue || "—") + "   |   Growth: " + (account.revenueGrowth || "—"),
-    "Employees: " + (account.employees || "—") + "   |   Open Roles: " + (account.openRoles || "—"),
-    "Stage: " + (account.stage || "—") + "   |   Priority: " + (account.priority || "—"),
+
+  // Industry subtitle
+  slide1.addText(account.industry || 'Industry', {
+    x: 0.5,
+    y: 3.1,
+    w: 12.33,
+    h: 0.4,
+    fontSize: 24,
+    color: brandColorLight,
+    align: 'center',
+    fontFace: 'Calibri'
+  });
+
+  // Key metrics row
+  const metrics = [
+    `Revenue: ${account.revenue || 'N/A'}`,
+    `Employees: ${account.employees || 'N/A'}`,
+    `Priority: ${account.priority || 'N/A'}`,
+    `Stage: ${account.stage || 'N/A'}`
   ];
-  s1.addText(meta.join("\n"), {
+  slide1.addText(metrics.join(' | '), {
     x: 0.5,
-    y: 3.0,
-    w: 12,
-    h: 1.4,
-    fontSize: 16,
-    color: SLATE,
-    fontFace: "Calibri",
-    lineSpacingMultiple: 1.4,
+    y: 4.0,
+    w: 12.33,
+    h: 0.35,
+    fontSize: 12,
+    color: 'E8F0FF',
+    align: 'center',
+    fontFace: 'Calibri'
   });
-  if (account.primarySponsor) {
-    s1.addText("Primary Sponsor: " + account.primarySponsor, {
-      x: 0.5,
-      y: 4.8,
-      w: 12,
-      h: 0.4,
-      fontSize: 13,
-      color: TEAL,
-      italic: true,
-    });
-  }
-  s1.addShape(pptx.ShapeType.rect, { x: 0, y: 6.8, w: 13.33, h: 0.3, fill: { color: TEAL } });
-  s1.addText("Confidential — For Internal Use Only", {
+
+  // Footer
+  slide1.addText('PHENOM CONFIDENTIAL', {
     x: 0.5,
-    y: 6.83,
-    w: 12,
-    h: 0.22,
+    y: 6.9,
+    w: 12.33,
+    h: 0.3,
     fontSize: 10,
-    color: WHITE,
-    align: "center",
-  }); // Slide 2 — Executive Brief
-  if (account.atAGlance || account.hypothesis) {
-    const s2 = pptx.addSlide();
-    s2.background = { color: BG };
-    s2.addText("Executive Brief", { x: 0.5, y: 0.3, w: 12, h: 0.5, fontSize: 24, bold: true, color: DARK });
-    s2.addShape(pptx.ShapeType.rect, { x: 0.5, y: 0.88, w: 2, h: 0.06, fill: { color: TEAL } });
-    let yOff = 1.1;
-    if (account.atAGlance) {
-      s2.addText(account.atAGlance, {
-        x: 0.5,
-        y: yOff,
-        w: 12,
-        h: 2.1,
-        fontSize: 12,
-        color: DARK,
-        wrap: true,
-        lineSpacingMultiple: 1.4,
-      });
-      yOff += 2.2;
-    }
-    if (account.hypothesis) {
-      s2.addText("Key Hypothesis", { x: 0.5, y: yOff, w: 12, h: 0.3, fontSize: 13, bold: true, color: TEAL });
-      yOff += 0.32;
-      s2.addText(account.hypothesis, {
-        x: 0.5,
-        y: yOff,
-        w: 12,
-        h: 1.5,
-        fontSize: 11,
-        color: DARK,
-        wrap: true,
-        lineSpacingMultiple: 1.3,
-      });
-      yOff += 1.6;
-    }
-    if (account.keySignals && account.keySignals.length) {
-      const sigText = account.keySignals
-        .slice(0, 6)
-        .map(function (sg) {
-          return "• " + sg;
-        })
-        .join("\n");
-      s2.addText("Key Signals", { x: 0.5, y: yOff, w: 12, h: 0.28, fontSize: 12, bold: true, color: DARK });
-      s2.addText(sigText, { x: 0.5, y: yOff + 0.3, w: 12, h: 1.1, fontSize: 10, color: MUTED, wrap: true });
-    }
-  } // Slide 3 — Strategic Priorities
-  const stratVals = [
-    ["CEO Priorities", account.ceoPriorities],
-    ["Transformation", account.transformationPrograms],
-    ["Growth Investments", account.growthInvestments],
-    ["Tech Bets", account.techBets],
-    ["Regulatory", account.regulatoryContext],
-  ].filter(function (x) {
-    return x[1];
+    color: brandColorLight,
+    align: 'center',
+    fontFace: 'Calibri'
   });
-  if (stratVals.length) {
-    const s3 = pptx.addSlide();
-    s3.background = { color: BG };
-    s3.addText("Strategic Priorities", { x: 0.5, y: 0.3, w: 12, h: 0.5, fontSize: 24, bold: true, color: DARK });
-    s3.addShape(pptx.ShapeType.rect, { x: 0.5, y: 0.88, w: 2, h: 0.06, fill: { color: TEAL } });
-    let yOff = 1.1;
-    stratVals.slice(0, 4).forEach(function (item) {
-      const lbl = item[0];
-      const val = item[1];
-      s3.addText(lbl, { x: 0.5, y: yOff, w: 12, h: 0.27, fontSize: 12, bold: true, color: TEAL });
-      yOff += 0.29;
-      const trimmed = val.length > 300 ? val.slice(0, 300) + "…" : val;
-      s3.addText(trimmed, { x: 0.5, y: yOff, w: 12, h: 0.72, fontSize: 11, color: DARK, wrap: true });
-      yOff += 0.82;
-    });
-  } // Slide 4 — Executive Mapping
-  const execs = (account.executives || []).filter(function (e) {
-    return e.name;
+
+  // ========== SLIDE 2: COMPANY AT A GLANCE (6 CARDS) ==========
+  const slide2 = pptx.addSlide();
+  slide2.background = { color: 'FFFFFF' };
+
+  // Title
+  slide2.addText('Company at a Glance', {
+    x: 0.5,
+    y: 0.3,
+    w: 12.33,
+    h: 0.4,
+    fontSize: 24,
+    bold: true,
+    color: '1E293B',
+    fontFace: 'Calibri'
   });
-  if (execs.length) {
-    const s4 = pptx.addSlide();
-    s4.background = { color: BG };
-    s4.addText("Executive Mapping", { x: 0.5, y: 0.3, w: 12, h: 0.5, fontSize: 24, bold: true, color: DARK });
-    s4.addShape(pptx.ShapeType.rect, { x: 0.5, y: 0.88, w: 2, h: 0.06, fill: { color: TEAL } });
-    let yOff = 1.1;
-    execs.slice(0, 3).forEach(function (exec) {
-      s4.addText(exec.name, { x: 0.5, y: yOff, w: 8.5, h: 0.3, fontSize: 14, bold: true, color: DARK });
-      s4.addText(exec.roleType || "", {
-        x: 9.3,
-        y: yOff,
-        w: 3.5,
-        h: 0.28,
-        fontSize: 10,
-        color: WHITE,
+
+  // 6 cards in 2x3 grid
+  const cards2 = [
+    {
+      title: 'Company at a Glance',
+      body: truncate(`${account.atAGlance || 'Company overview'}\n\nRevenue: ${account.revenue}\nEmployees: ${account.employees}`, 200),
+      tags: [account.industry, account.stage, account.priority]
+    },
+    {
+      title: 'Strategic Direction',
+      body: truncate(`${account.ceoPriorities || 'CEO priorities'}\n\nTransformation: ${account.transformationPrograms || 'N/A'}`, 200),
+      tags: ['Leadership', 'Strategy', 'Growth']
+    },
+    {
+      title: 'Growth Profile',
+      body: truncate(`Growth/Contraction: ${account.growthContraction || 'N/A'}\n\nRevenue Growth: ${account.revenueGrowth || 'N/A'}`, 200),
+      tags: ['Expansion', 'Market', 'Velocity']
+    },
+    {
+      title: 'Talent & Workforce',
+      body: truncate(`${account.talentPressure || 'Talent challenges'}\n\nWorkforce Scale: ${account.workforceScale || 'N/A'}\n\nCHRO Focus: ${account.chroProblems || 'N/A'}`, 180),
+      tags: ['Hiring', 'Retention', 'Growth']
+    },
+    {
+      title: 'Talent Acquisition',
+      body: truncate(`Hiring Shape: ${account.hiringShape || 'N/A'}\n\nCritical Roles: ${account.criticalRoles || 'N/A'}\n\nWorkflow: ${account.workflowAssessment || 'N/A'}`, 180),
+      tags: ['Staffing', 'Process', 'Skills']
+    },
+    {
+      title: 'Phenom Entry Angle',
+      body: truncate(`Opportunity: ${account.highestOpportunity || 'N/A'}\n\nCapability Match: ${account.capabilityMatch || 'N/A'}\n\nNarrative: ${account.leadNarrative || 'N/A'}`, 180),
+      tags: ['Solution', 'Fit', 'Value']
+    }
+  ];
+
+  let cardIdx = 0;
+  for (let row = 0; row < 2; row++) {
+    for (let col = 0; col < 3; col++) {
+      const card = cards2[cardIdx];
+      if (!card) break;
+
+      const cardX = 0.5 + col * 4.2;
+      const cardY = 1.0 + row * 3.2;
+      const cardW = 4.0;
+      const cardH = 3.0;
+
+      // Card background
+      slide2.addShape(pptx.ShapeType.rect, {
+        x: cardX,
+        y: cardY,
+        w: cardW,
+        h: cardH,
+        fill: { color: 'FFFFFF' },
+        line: { color: 'E2E8F0', width: 1 },
+        shadow: cardShadow()
+      });
+
+      // Left colored border
+      slide2.addShape(pptx.ShapeType.rect, {
+        x: cardX,
+        y: cardY,
+        w: 0.08,
+        h: cardH,
+        fill: { color: brandColor },
+        line: { type: 'none' }
+      });
+
+      // Header badge
+      slide2.addShape(pptx.ShapeType.rect, {
+        x: cardX + 0.15,
+        y: cardY + 0.15,
+        w: 1.5,
+        h: 0.3,
+        fill: { color: brandColorLight },
+        line: { color: brandColor, width: 0.5 }
+      });
+
+      slide2.addText(card.title, {
+        x: cardX + 0.15,
+        y: cardY + 0.15,
+        w: 1.5,
+        h: 0.3,
+        fontSize: 9,
         bold: true,
-        fill: { color: TEAL },
-        align: "center",
+        color: brandColor,
+        align: 'center',
+        valign: 'middle',
+        fontFace: 'Calibri'
       });
-      yOff += 0.32;
-      if (exec.title) {
-        s4.addText(exec.title, { x: 0.5, y: yOff, w: 12, h: 0.22, fontSize: 11, color: MUTED, italic: true });
-        yOff += 0.25;
-      }
-      if (exec.priorities) {
-        const pri = exec.priorities.length > 200 ? exec.priorities.slice(0, 200) + "…" : exec.priorities;
-        s4.addText("Priorities: " + pri, { x: 0.5, y: yOff, w: 12, h: 0.45, fontSize: 10, color: DARK, wrap: true });
-        yOff += 0.5;
-      }
-      if (exec.outreachAngles) {
-        const ang = exec.outreachAngles.length > 200 ? exec.outreachAngles.slice(0, 200) + "…" : exec.outreachAngles;
-        s4.addText("Outreach: " + ang, { x: 0.5, y: yOff, w: 12, h: 0.42, fontSize: 10, color: MUTED, wrap: true });
-        yOff += 0.5;
-      }
-      yOff += 0.1;
-    });
-  } // Slide 5 — Business Challenges
-  const challenges = (account.challenges || []).filter(function (c) {
-    return c.title;
-  });
-  if (challenges.length) {
-    const s5 = pptx.addSlide();
-    s5.background = { color: BG };
-    s5.addText("Business Challenges", { x: 0.5, y: 0.3, w: 12, h: 0.5, fontSize: 24, bold: true, color: DARK });
-    s5.addShape(pptx.ShapeType.rect, { x: 0.5, y: 0.88, w: 2, h: 0.06, fill: { color: TEAL } });
-    let yOff = 1.1;
-    challenges.slice(0, 3).forEach(function (ch) {
-      const col = SEV_COLOR[ch.severity] || MUTED;
-      s5.addText("[" + ch.severity + "]", { x: 0.5, y: yOff, w: 1.6, h: 0.27, fontSize: 11, bold: true, color: col });
-      s5.addText(ch.title, { x: 2.2, y: yOff, w: 10.6, h: 0.27, fontSize: 13, bold: true, color: DARK });
-      yOff += 0.32;
-      if (ch.businessChallenge) {
-        const bc = ch.businessChallenge.length > 250 ? ch.businessChallenge.slice(0, 250) + "…" : ch.businessChallenge;
-        s5.addText(bc, { x: 0.5, y: yOff, w: 12, h: 0.55, fontSize: 11, color: DARK, wrap: true });
-        yOff += 0.6;
-      }
-      if (ch.solution) {
-        const sol = ch.solution.length > 200 ? ch.solution.slice(0, 200) + "…" : ch.solution;
-        s5.addText("Solution: " + sol, { x: 0.5, y: yOff, w: 12, h: 0.45, fontSize: 10, color: "2563EB", wrap: true });
-        yOff += 0.52;
-      }
-      yOff += 0.06;
-    });
-  } // Slide 6 — Outcome Framing
-  if (account.outcomeStatement || account.quantifiedImpact) {
-    const s6 = pptx.addSlide();
-    s6.background = { color: BG };
-    s6.addText("Outcome Framing", { x: 0.5, y: 0.3, w: 12, h: 0.5, fontSize: 24, bold: true, color: DARK });
-    s6.addShape(pptx.ShapeType.rect, { x: 0.5, y: 0.88, w: 2, h: 0.06, fill: { color: TEAL } });
-    let yOff = 1.1;
-    if (account.outcomeStatement) {
-      s6.addText("Target Outcome", { x: 0.5, y: yOff, w: 12, h: 0.28, fontSize: 13, bold: true, color: TEAL });
-      yOff += 0.32;
-      s6.addText(account.outcomeStatement, {
-        x: 0.5,
-        y: yOff,
-        w: 12,
-        h: 1.5,
-        fontSize: 12,
-        color: DARK,
-        wrap: true,
-        lineSpacingMultiple: 1.4,
+
+      // Body text
+      slide2.addText(card.body, {
+        x: cardX + 0.15,
+        y: cardY + 0.55,
+        w: 3.7,
+        h: 2.0,
+        fontSize: 10,
+        color: '1E293B',
+        align: 'left',
+        valign: 'top',
+        fontFace: 'Calibri'
       });
-      yOff += 1.6;
+
+      // Tags at bottom
+      addTagRow(slide2, cardX + 0.15, cardY + 2.65, card.tags, brandColor);
+
+      cardIdx++;
     }
-    if (account.quantifiedImpact) {
-      s6.addText("Quantified Impact", { x: 0.5, y: yOff, w: 12, h: 0.28, fontSize: 13, bold: true, color: TEAL });
-      yOff += 0.32;
-      s6.addText(account.quantifiedImpact, { x: 0.5, y: yOff, w: 12, h: 1.2, fontSize: 12, color: DARK, wrap: true });
-      yOff += 1.3;
-    }
-    if (account.discoveryQuestions) {
-      s6.addText("Discovery Questions", { x: 0.5, y: yOff, w: 12, h: 0.28, fontSize: 13, bold: true, color: TEAL });
-      yOff += 0.32;
-      s6.addText(account.discoveryQuestions, { x: 0.5, y: yOff, w: 12, h: 1.4, fontSize: 11, color: DARK, wrap: true });
-    }
-  } // Slide 7 — Hyper-Cell Opportunity
-  const s7 = pptx.addSlide();
-  s7.background = { color: DARK };
-  s7.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: 13.33, h: 0.08, fill: { color: TEAL } });
-  s7.addText("Hyper-Cell Opportunity", { x: 0.5, y: 0.4, w: 12, h: 0.5, fontSize: 24, bold: true, color: WHITE });
-  s7.addShape(pptx.ShapeType.rect, { x: 0.5, y: 0.98, w: 2, h: 0.06, fill: { color: TEAL } });
-  if (account.hyperCellTitle) {
-    s7.addText(account.hyperCellTitle, {
-      x: 0.5,
-      y: 1.2,
-      w: 12,
-      h: 0.6,
-      fontSize: 20,
-      bold: true,
-      color: TEAL,
-      wrap: true,
-    });
   }
-  if (account.hyperCellNarrative) {
-    s7.addText(account.hyperCellNarrative, {
-      x: 0.5,
-      y: 2.0,
-      w: 12,
-      h: 2.6,
-      fontSize: 13,
-      color: SLATE,
-      wrap: true,
-      lineSpacingMultiple: 1.5,
-    });
-  }
-  if (account.whyNowFraming) {
-    s7.addText("Why Now", { x: 0.5, y: 4.75, w: 12, h: 0.28, fontSize: 12, bold: true, color: TEAL });
-    s7.addText(account.whyNowFraming, { x: 0.5, y: 5.08, w: 12, h: 0.9, fontSize: 11, color: SLATE, wrap: true });
-  }
-  s7.addShape(pptx.ShapeType.rect, { x: 0, y: 6.8, w: 13.33, h: 0.3, fill: { color: TEAL } });
-  s7.addText("Confidential — For Internal Use Only", {
+
+  // ========== SLIDE 3: STEPS 1-4 (2x2 GRID) ==========
+  const slide3 = pptx.addSlide();
+  slide3.background = { color: 'FFFFFF' };
+
+  // Title
+  slide3.addText(account.companyName || 'Company', {
     x: 0.5,
-    y: 6.83,
-    w: 12,
-    h: 0.22,
-    fontSize: 10,
-    color: WHITE,
-    align: "center",
+    y: 0.3,
+    w: 12.33,
+    h: 0.4,
+    fontSize: 24,
+    bold: true,
+    color: '1E293B',
+    fontFace: 'Calibri'
   });
-  var pptxSafeName = (account.companyName || "Account").replace(/[^a-zA-Z0-9\s_-]/g, "").trim();
-  var pptxBlob = await pptx.write({ outputType: "blob" });
-  dlBlob(pptxBlob, pptxSafeName + "_Prospect_Brief.pptx");
-} // ─── Shared HTML generator (used by both PDF and print) ──────────────────────
+
+  slide3.addText('Steps 1–4 · Context, growth, structure & workflows', {
+    x: 0.5,
+    y: 0.75,
+    w: 12.33,
+    h: 0.3,
+    fontSize: 12,
+    color: '64748B',
+    fontFace: 'Calibri'
+  });
+
+  // 2x2 step cards
+  const steps = [
+    {
+      num: 1,
+      question: 'What is the company trying to become?',
+      body: truncate(`${account.hypothesis || 'Strategic hypothesis'}\n\nCore Business: ${account.coreBusiness || 'N/A'}`, 200),
+      tags: ['Strategy', 'Vision', 'Direction']
+    },
+    {
+      num: 2,
+      question: 'Where are they growing and shrinking?',
+      body: truncate(`Growth/Contraction: ${account.growthContraction || 'N/A'}\n\nEmployees: ${account.employees || 'N/A'}\n\nRevenue Growth: ${account.revenueGrowth || 'N/A'}`, 200),
+      tags: ['Expansion', 'Headcount', 'Market']
+    },
+    {
+      num: 3,
+      question: 'Which business units or locations matter most?',
+      body: truncate(`Scale Footprint: ${account.scaleFootprint || 'N/A'}\n\nGeo Patterns: ${account.geoPatterns || 'N/A'}\n\nBusiness Segments: ${account.businessSegments || 'N/A'}`, 200),
+      tags: ['Geography', 'Business Unit', 'Priority']
+    },
+    {
+      num: 4,
+      question: 'Which job families or workflows are tied to that strategy?',
+      body: truncate(`Critical Roles: ${account.criticalRoles || 'N/A'}\n\nHiring Shape: ${account.hiringShape || 'N/A'}\n\nWorkflow: ${account.workflowAssessment || 'N/A'}`, 200),
+      tags: ['Roles', 'Hiring', 'Process']
+    }
+  ];
+
+  let stepIdx = 0;
+  for (let row = 0; row < 2; row++) {
+    for (let col = 0; col < 2; col++) {
+      const step = steps[stepIdx];
+      if (!step) break;
+
+      const cardX = 0.5 + col * 6.3;
+      const cardY = 1.3 + row * 3.0;
+      const cardW = 6.0;
+      const cardH = 2.8;
+
+      // Card background
+      slide3.addShape(pptx.ShapeType.rect, {
+        x: cardX,
+        y: cardY,
+        w: cardW,
+        h: cardH,
+        fill: { color: 'FFFFFF' },
+        line: { color: 'E2E8F0', width: 1 },
+        shadow: cardShadow()
+      });
+
+      // Left colored border
+      slide3.addShape(pptx.ShapeType.rect, {
+        x: cardX,
+        y: cardY,
+        w: 0.08,
+        h: cardH,
+        fill: { color: brandColor },
+        line: { type: 'none' }
+      });
+
+      // Step number circle
+      slide3.addShape(pptx.ShapeType.ellipse, {
+        x: cardX + 0.15,
+        y: cardY + 0.15,
+        w: 0.35,
+        h: 0.35,
+        fill: { color: brandColor },
+        line: { type: 'none' }
+      });
+
+      slide3.addText(step.num.toString(), {
+        x: cardX + 0.15,
+        y: cardY + 0.15,
+        w: 0.35,
+        h: 0.35,
+        fontSize: 16,
+        bold: true,
+        color: 'FFFFFF',
+        align: 'center',
+        valign: 'middle',
+        fontFace: 'Calibri'
+      });
+
+      // Question header
+      slide3.addText(step.question, {
+        x: cardX + 0.6,
+        y: cardY + 0.15,
+        w: 5.25,
+        h: 0.6,
+        fontSize: 12,
+        bold: true,
+        color: brandColor,
+        align: 'left',
+        valign: 'top',
+        fontFace: 'Calibri'
+      });
+
+      // Body text
+      slide3.addText(step.body, {
+        x: cardX + 0.15,
+        y: cardY + 0.85,
+        w: 5.7,
+        h: 1.5,
+        fontSize: 10,
+        color: '1E293B',
+        align: 'left',
+        valign: 'top',
+        fontFace: 'Calibri'
+      });
+
+      // Tags
+      addTagRow(slide3, cardX + 0.15, cardY + 2.45, step.tags, brandColor);
+
+      stepIdx++;
+    }
+  }
+
+  // ========== SLIDE 4: WHERE PHENOM HAS IMPACT ==========
+  const slide4 = pptx.addSlide();
+  slide4.background = { color: 'FFFFFF' };
+
+  // Title
+  slide4.addText(`Where Phenom Has Specific, Measurable Impact at ${account.companyName || 'Company'}`, {
+    x: 0.5,
+    y: 0.3,
+    w: 12.33,
+    h: 0.5,
+    fontSize: 20,
+    bold: true,
+    color: '1E293B',
+    fontFace: 'Calibri'
+  });
+
+  slide4.addText('Key triggers converging now', {
+    x: 0.5,
+    y: 0.85,
+    w: 12.33,
+    h: 0.3,
+    fontSize: 12,
+    color: '64748B',
+    fontFace: 'Calibri'
+  });
+
+  // Impact columns
+  const triggers = [
+    {
+      title: 'Business Pain',
+      body: truncate(account.businessPain || 'Primary business challenge', 150),
+      phenomImpact: 'Addresses core hiring and talent challenges',
+      question: 'How are you currently solving this?'
+    },
+    {
+      title: 'Why Now',
+      body: truncate(account.whyNow || 'Timing and urgency', 150),
+      phenomImpact: 'Solutions align with current priorities',
+      question: 'What is your timeline?'
+    },
+    {
+      title: 'Growth Area',
+      body: truncate(account.microGrowthArea || 'Key growth opportunity', 150),
+      phenomImpact: 'Talent to scale growth initiatives',
+      question: 'What talent gaps exist?'
+    },
+    {
+      title: 'Geo Impact',
+      body: truncate(account.geoConflictImpact || 'Geographic considerations', 150),
+      phenomImpact: 'Localized talent strategies',
+      question: 'Where are hiring challenges concentrated?'
+    }
+  ];
+
+  const colWidth = (12.33 - 0.4) / Math.min(triggers.length, 4);
+  triggers.slice(0, 4).forEach((trigger, idx) => {
+    const colX = 0.5 + idx * colWidth;
+    const colY = 1.3;
+    const colH = 5.9;
+
+    // Column background
+    slide4.addShape(pptx.ShapeType.rect, {
+      x: colX,
+      y: colY,
+      w: colWidth - 0.1,
+      h: colH,
+      fill: { color: 'FFFFFF' },
+      line: { color: 'E2E8F0', width: 1 },
+      shadow: cardShadow()
+    });
+
+    // Top colored border
+    slide4.addShape(pptx.ShapeType.rect, {
+      x: colX,
+      y: colY,
+      w: colWidth - 0.1,
+      h: 0.06,
+      fill: { color: brandColor },
+      line: { type: 'none' }
+    });
+
+    // Column title
+    slide4.addText(trigger.title, {
+      x: colX + 0.1,
+      y: colY + 0.1,
+      w: colWidth - 0.2,
+      h: 0.4,
+      fontSize: 12,
+      bold: true,
+      color: brandColor,
+      align: 'center',
+      fontFace: 'Calibri'
+    });
+
+    // Body
+    slide4.addText(trigger.body, {
+      x: colX + 0.1,
+      y: colY + 0.55,
+      w: colWidth - 0.2,
+      h: 1.0,
+      fontSize: 9,
+      color: '1E293B',
+      align: 'left',
+      valign: 'top',
+      fontFace: 'Calibri'
+    });
+
+    // Phenom impact section
+    slide4.addText('Phenom Impact:', {
+      x: colX + 0.1,
+      y: colY + 1.7,
+      w: colWidth - 0.2,
+      h: 0.25,
+      fontSize: 9,
+      bold: true,
+      color: brandColor,
+      align: 'left',
+      fontFace: 'Calibri'
+    });
+
+    slide4.addText(trigger.phenomImpact, {
+      x: colX + 0.1,
+      y: colY + 2.0,
+      w: colWidth - 0.2,
+      h: 1.0,
+      fontSize: 9,
+      color: '1E293B',
+      align: 'left',
+      valign: 'top',
+      fontFace: 'Calibri'
+    });
+
+    // Question box
+    slide4.addShape(pptx.ShapeType.rect, {
+      x: colX + 0.1,
+      y: colY + 3.2,
+      w: colWidth - 0.2,
+      h: 2.35,
+      fill: { color: brandColorLight },
+      line: { color: brandColor, width: 1 }
+    });
+
+    slide4.addText('Question to ask:', {
+      x: colX + 0.15,
+      y: colY + 3.3,
+      w: colWidth - 0.3,
+      h: 0.25,
+      fontSize: 8,
+      bold: true,
+      color: 'CC0000',
+      align: 'left',
+      fontFace: 'Calibri'
+    });
+
+    slide4.addText(trigger.question, {
+      x: colX + 0.15,
+      y: colY + 3.6,
+      w: colWidth - 0.3,
+      h: 1.85,
+      fontSize: 9,
+      color: '1E293B',
+      align: 'left',
+      valign: 'top',
+      fontFace: 'Calibri'
+    });
+  });
+
+  // ========== SLIDE 5: HYPOTHESES ==========
+  const slide5 = pptx.addSlide();
+  slide5.background = { color: 'FFFFFF' };
+
+  // Title
+  slide5.addText(`Where Phenom Has Specific, Measurable Impact at ${account.companyName || 'Company'}`, {
+    x: 0.5,
+    y: 0.3,
+    w: 12.33,
+    h: 0.5,
+    fontSize: 20,
+    bold: true,
+    color: '1E293B',
+    fontFace: 'Calibri'
+  });
+
+  const hypotheses = [
+    {
+      title: account.hyperCellTitle || 'Hypothesis 1',
+      evidence: `${account.hyperCellNarrative || 'Key evidence and analysis'}`,
+      phenomImpact: account.capabilityMatch || 'Phenom solution alignment',
+      question: account.discoveryQuestions ? (typeof account.discoveryQuestions === 'string' ? account.discoveryQuestions : account.discoveryQuestions[0]) : 'Discovery question?'
+    },
+    {
+      title: account.problemHypothesis || 'Hypothesis 2',
+      evidence: `Secondary hypothesis: ${account.whyNowFraming || 'Framework for consideration'}`,
+      phenomImpact: account.outcomeStatement || 'Expected outcome and impact',
+      question: account.discoveryQuestions ? (typeof account.discoveryQuestions === 'string' ? '' : (account.discoveryQuestions[1] || 'Second discovery question?')) : 'Second discovery question?'
+    }
+  ];
+
+  hypotheses.forEach((hyp, idx) => {
+    const hypX = 0.5 + idx * 6.4;
+    const hypY = 1.0;
+    const hypW = 6.2;
+    const hypH = 6.2;
+
+    // Hypothesis card background
+    slide5.addShape(pptx.ShapeType.rect, {
+      x: hypX,
+      y: hypY,
+      w: hypW,
+      h: hypH,
+      fill: { color: 'FFFFFF' },
+      line: { color: 'E2E8F0', width: 1 },
+      shadow: cardShadow()
+    });
+
+    // Left border
+    slide5.addShape(pptx.ShapeType.rect, {
+      x: hypX,
+      y: hypY,
+      w: 0.08,
+      h: hypH,
+      fill: { color: brandColor },
+      line: { type: 'none' }
+    });
+
+    // Title
+    slide5.addText(hyp.title, {
+      x: hypX + 0.2,
+      y: hypY + 0.2,
+      w: hypW - 0.4,
+      h: 0.5,
+      fontSize: 13,
+      bold: true,
+      color: brandColor,
+      align: 'left',
+      fontFace: 'Calibri'
+    });
+
+    // Evidence section
+    slide5.addText('PUBLIC EVIDENCE', {
+      x: hypX + 0.2,
+      y: hypY + 0.8,
+      w: hypW - 0.4,
+      h: 0.25,
+      fontSize: 9,
+      bold: true,
+      color: '64748B',
+      align: 'left',
+      fontFace: 'Calibri'
+    });
+
+    slide5.addText(truncate(hyp.evidence, 250), {
+      x: hypX + 0.2,
+      y: hypY + 1.1,
+      w: hypW - 0.4,
+      h: 1.5,
+      fontSize: 10,
+      color: '1E293B',
+      align: 'left',
+      valign: 'top',
+      fontFace: 'Calibri'
+    });
+
+    // Phenom impact
+    slide5.addText('Phenom\'s Specific Impact:', {
+      x: hypX + 0.2,
+      y: hypY + 2.7,
+      w: hypW - 0.4,
+      h: 0.25,
+      fontSize: 9,
+      bold: true,
+      color: brandColor,
+      align: 'left',
+      fontFace: 'Calibri'
+    });
+
+    slide5.addText(truncate(hyp.phenomImpact, 200), {
+      x: hypX + 0.2,
+      y: hypY + 3.0,
+      w: hypW - 0.4,
+      h: 1.2,
+      fontSize: 10,
+      color: '1E293B',
+      align: 'left',
+      valign: 'top',
+      fontFace: 'Calibri'
+    });
+
+    // Question box
+    slide5.addShape(pptx.ShapeType.rect, {
+      x: hypX + 0.2,
+      y: hypY + 4.3,
+      w: hypW - 0.4,
+      h: 1.6,
+      fill: { color: 'FFF0F0' },
+      line: { color: 'CC0000', width: 1 }
+    });
+
+    slide5.addText('Question to ask:', {
+      x: hypX + 0.3,
+      y: hypY + 4.4,
+      w: hypW - 0.6,
+      h: 0.2,
+      fontSize: 8,
+      bold: true,
+      color: 'CC0000',
+      align: 'left',
+      fontFace: 'Calibri'
+    });
+
+    slide5.addText(hyp.question, {
+      x: hypX + 0.3,
+      y: hypY + 4.65,
+      w: hypW - 0.6,
+      h: 1.15,
+      fontSize: 9,
+      color: '1E293B',
+      align: 'left',
+      valign: 'top',
+      fontFace: 'Calibri'
+    });
+  });
+
+  // ========== SLIDE 6: WORK ZONES ==========
+  const slide6 = pptx.addSlide();
+  slide6.background = { color: 'FFFFFF' };
+
+  // Title
+  slide6.addText('Work Zones', {
+    x: 0.5,
+    y: 0.3,
+    w: 12.33,
+    h: 0.4,
+    fontSize: 24,
+    bold: true,
+    color: '1E293B',
+    fontFace: 'Calibri'
+  });
+
+  // 5 gradient zones
+  const zones = [
+    { name: 'Zone 1', desc: 'Little to no preparation', roles: 'Entry-level, Frontline', headcount: '~45%', color: 'FF9D5C' },
+    { name: 'Zone 2', desc: 'Moderate preparation', roles: 'Mid-level roles', headcount: '~20%', color: 'FFD700' },
+    { name: 'Zone 3', desc: 'Technical/Specialized', roles: 'Technical Roles', headcount: '~15%', color: 'A855D7' },
+    { name: 'Zone 4', desc: 'Extensive preparation', roles: 'Senior/Specialist', headcount: '~15%', color: '3B82F6' },
+    { name: 'Zone 5', desc: 'Executive/Strategic', roles: 'C-Suite roles', headcount: '~5%', color: '10B981' }
+  ];
+
+  const zoneWidth = (12.33 - 0.5) / zones.length;
+  zones.forEach((zone, idx) => {
+    const zoneX = 0.5 + idx * zoneWidth;
+    const zoneY = 1.0;
+    const zoneH = 6.2;
+
+    // Zone column background with gradient effect
+    slide6.addShape(pptx.ShapeType.rect, {
+      x: zoneX,
+      y: zoneY,
+      w: zoneWidth - 0.05,
+      h: zoneH,
+      fill: { color: zone.color },
+      line: { color: '1E293B', width: 0.5 }
+    });
+
+    // Zone header
+    slide6.addText(zone.name, {
+      x: zoneX + 0.05,
+      y: zoneY + 0.2,
+      w: zoneWidth - 0.15,
+      h: 0.35,
+      fontSize: 12,
+      bold: true,
+      color: 'FFFFFF',
+      align: 'center',
+      fontFace: 'Calibri'
+    });
+
+    // Description
+    slide6.addText(zone.desc, {
+      x: zoneX + 0.05,
+      y: zoneY + 0.65,
+      w: zoneWidth - 0.15,
+      h: 0.6,
+      fontSize: 9,
+      color: 'FFFFFF',
+      align: 'center',
+      valign: 'top',
+      fontFace: 'Calibri'
+    });
+
+    // Roles
+    slide6.addText(zone.roles, {
+      x: zoneX + 0.05,
+      y: zoneY + 1.4,
+      w: zoneWidth - 0.15,
+      h: 1.0,
+      fontSize: 9,
+      bold: true,
+      color: 'FFFFFF',
+      align: 'center',
+      valign: 'top',
+      fontFace: 'Calibri'
+    });
+
+    // Headcount percentage
+    slide6.addText(zone.headcount, {
+      x: zoneX + 0.05,
+      y: zoneY + 2.6,
+      w: zoneWidth - 0.15,
+      h: 0.4,
+      fontSize: 14,
+      bold: true,
+      color: 'FFFFFF',
+      align: 'center',
+      fontFace: 'Calibri'
+    });
+
+    slide6.addText('of headcount', {
+      x: zoneX + 0.05,
+      y: zoneY + 3.0,
+      w: zoneWidth - 0.15,
+      h: 0.3,
+      fontSize: 9,
+      color: 'FFFFFF',
+      align: 'center',
+      fontFace: 'Calibri'
+    });
+  });
+
+  // ========== SLIDE 7: HIRING PROCESS - ZONE 1 (HIGH VOLUME) ==========
+  const slide7 = pptx.addSlide();
+  slide7.background = { color: 'FFFFFF' };
+
+  // Title
+  slide7.addText('Hiring Process — Zone 1', {
+    x: 0.5,
+    y: 0.3,
+    w: 12.33,
+    h: 0.4,
+    fontSize: 24,
+    bold: true,
+    color: '1E293B',
+    fontFace: 'Calibri'
+  });
+
+  slide7.addText('High Volume, Entry-Level Roles', {
+    x: 0.5,
+    y: 0.75,
+    w: 12.33,
+    h: 0.3,
+    fontSize: 12,
+    color: '64748B',
+    fontFace: 'Calibri'
+  });
+
+  // Current ATS layer
+  slide7.addText('Current ATS (Cornerstone/SAP/Oracle):', {
+    x: 0.5,
+    y: 1.15,
+    w: 12.33,
+    h: 0.25,
+    fontSize: 11,
+    bold: true,
+    color: '1E293B',
+    fontFace: 'Calibri'
+  });
+
+  const atsSteps = ['Job Posted', 'Apply', 'Screening', 'Interview', 'Offer', 'Hired'];
+  const atsStepX = [0.7, 1.8, 2.9, 4.0, 5.1, 6.2];
+
+  atsSteps.forEach((step, idx) => {
+    // Step box
+    slide7.addShape(pptx.ShapeType.rect, {
+      x: atsStepX[idx],
+      y: 1.5,
+      w: 0.9,
+      h: 0.5,
+      fill: { color: brandColorLight },
+      line: { color: brandColor, width: 1 }
+    });
+
+    slide7.addText(step, {
+      x: atsStepX[idx],
+      y: 1.5,
+      w: 0.9,
+      h: 0.5,
+      fontSize: 9,
+      color: '1E293B',
+      align: 'center',
+      valign: 'middle',
+      fontFace: 'Calibri'
+    });
+
+    // Arrow to next
+    if (idx < atsSteps.length - 1) {
+      slide7.addShape(pptx.ShapeType.rect, {
+        x: atsStepX[idx] + 1.0,
+        y: 1.7,
+        w: 0.7,
+        h: 0.1,
+        fill: { color: '64748B' },
+        line: { type: 'none' }
+      });
+    }
+  });
+
+  // Phenom layer
+  slide7.addText('Phenom Layer (AI-Driven Screening):', {
+    x: 0.5,
+    y: 2.25,
+    w: 12.33,
+    h: 0.25,
+    fontSize: 11,
+    bold: true,
+    color: '1E293B',
+    fontFace: 'Calibri'
+  });
+
+  const phenomSteps = ['Job in Phenom', 'Job Matching', 'Smart Apply', 'AI Screening', 'Routing', 'Interview Insights'];
+  const phenomStepX = [0.7, 1.8, 2.9, 4.0, 5.1, 6.2];
+
+  phenomSteps.forEach((step, idx) => {
+    // Step box
+    slide7.addShape(pptx.ShapeType.rect, {
+      x: phenomStepX[idx],
+      y: 2.6,
+      w: 0.9,
+      h: 0.5,
+      fill: { color: 'FFEDD5' },
+      line: { color: 'FF9D5C', width: 1 }
+    });
+
+    slide7.addText(step, {
+      x: phenomStepX[idx],
+      y: 2.6,
+      w: 0.9,
+      h: 0.5,
+      fontSize: 9,
+      bold: true,
+      color: 'FF9D5C',
+      align: 'center',
+      valign: 'middle',
+      fontFace: 'Calibri'
+    });
+
+    // Arrow
+    if (idx < phenomSteps.length - 1) {
+      slide7.addShape(pptx.ShapeType.rect, {
+        x: phenomStepX[idx] + 1.0,
+        y: 2.8,
+        w: 0.7,
+        h: 0.1,
+        fill: { color: 'FF9D5C' },
+        line: { type: 'none' }
+      });
+    }
+  });
+
+  // Decision outcomes
+  slide7.addText('AI Screening Results:', {
+    x: 0.5,
+    y: 3.35,
+    w: 12.33,
+    h: 0.25,
+    fontSize: 11,
+    bold: true,
+    color: '1E293B',
+    fontFace: 'Calibri'
+  });
+
+  const outcomes = [
+    { label: 'HIGH SCORE', color: '10B981', path: '→ Interview' },
+    { label: 'MEDIUM SCORE', color: 'FFD700', path: '→ Phone Screen' },
+    { label: 'LOW SCORE', color: 'EF4444', path: '→ Nurture Pool' }
+  ];
+
+  outcomes.forEach((outcome, idx) => {
+    const outcomeX = 2.0 + idx * 3.0;
+    slide7.addShape(pptx.ShapeType.rect, {
+      x: outcomeX,
+      y: 3.7,
+      w: 2.5,
+      h: 0.5,
+      fill: { color: outcome.color },
+      line: { color: '1E293B', width: 1 }
+    });
+
+    slide7.addText(`${outcome.label} ${outcome.path}`, {
+      x: outcomeX,
+      y: 3.7,
+      w: 2.5,
+      h: 0.5,
+      fontSize: 10,
+      bold: true,
+      color: 'FFFFFF',
+      align: 'center',
+      valign: 'middle',
+      fontFace: 'Calibri'
+    });
+  });
+
+  // Metrics at bottom
+  slide7.addText('Automation: Level 3 | Intelligence: Level 2 | Time to Hire: -40% | Quality of Hire: +25%', {
+    x: 0.5,
+    y: 4.5,
+    w: 12.33,
+    h: 0.6,
+    fontSize: 11,
+    bold: true,
+    color: brandColor,
+    align: 'center',
+    fontFace: 'Calibri'
+  });
+
+  // Benefits boxes
+  const benefits = [
+    'Reduces screening time from 2-3 days to 2-3 hours',
+    'Improves first-round interview quality by 35%',
+    'Enables 24/7 candidate engagement & feedback'
+  ];
+
+  benefits.forEach((benefit, idx) => {
+    const benefitX = 0.8 + idx * 4.0;
+    slide7.addShape(pptx.ShapeType.rect, {
+      x: benefitX,
+      y: 5.3,
+      w: 3.6,
+      h: 1.5,
+      fill: { color: 'F0F9FF' },
+      line: { color: brandColor, width: 1 }
+    });
+
+    slide7.addText(benefit, {
+      x: benefitX + 0.15,
+      y: 5.45,
+      w: 3.3,
+      h: 1.2,
+      fontSize: 10,
+      color: '1E293B',
+      align: 'center',
+      valign: 'middle',
+      fontFace: 'Calibri'
+    });
+  });
+
+  // ========== SLIDE 8: HIRING PROCESS - ZONE 3 (TECHNICAL) ==========
+  const slide8 = pptx.addSlide();
+  slide8.background = { color: 'FFFFFF' };
+
+  // Title
+  slide8.addText('Hiring Process — Zone 3', {
+    x: 0.5,
+    y: 0.3,
+    w: 12.33,
+    h: 0.4,
+    fontSize: 24,
+    bold: true,
+    color: '1E293B',
+    fontFace: 'Calibri'
+  });
+
+  slide8.addText('Technical & Mid-to-Senior Roles', {
+    x: 0.5,
+    y: 0.75,
+    w: 12.33,
+    h: 0.3,
+    fontSize: 12,
+    color: '64748B',
+    fontFace: 'Calibri'
+  });
+
+  // Source channels
+  slide8.addText('Source Channels:', {
+    x: 0.5,
+    y: 1.15,
+    w: 12.33,
+    h: 0.25,
+    fontSize: 11,
+    bold: true,
+    color: '1E293B',
+    fontFace: 'Calibri'
+  });
+
+  const sources = ['CRM + Talent Pool', 'Career Site + LinkedIn', 'Internal Mobility'];
+  const sourceX = [0.7, 3.5, 6.5];
+
+  sources.forEach((source, idx) => {
+    slide8.addShape(pptx.ShapeType.rect, {
+      x: sourceX[idx],
+      y: 1.5,
+      w: 2.3,
+      h: 0.5,
+      fill: { color: 'A855D7' },
+      line: { color: '1E293B', width: 1 }
+    });
+
+    slide8.addText(source, {
+      x: sourceX[idx],
+      y: 1.5,
+      w: 2.3,
+      h: 0.5,
+      fontSize: 10,
+      bold: true,
+      color: 'FFFFFF',
+      align: 'center',
+      valign: 'middle',
+      fontFace: 'Calibri'
+    });
+  });
+
+  // Interview funnel
+  slide8.addText('Interview Process:', {
+    x: 0.5,
+    y: 2.25,
+    w: 12.33,
+    h: 0.25,
+    fontSize: 11,
+    bold: true,
+    color: '1E293B',
+    fontFace: 'Calibri'
+  });
+
+  const interviews = ['Phone Screen', 'Technical Assessment', 'Manager Interview', 'Culture Panel', 'Offer'];
+  let interviewX = 0.7;
+  interviews.forEach((interview, idx) => {
+    const boxWidth = 2.0;
+    slide8.addShape(pptx.ShapeType.rect, {
+      x: interviewX,
+      y: 2.6,
+      w: boxWidth,
+      h: 0.6,
+      fill: { color: 'EDE9FE' },
+      line: { color: 'A855D7', width: 1 }
+    });
+
+    slide8.addText(interview, {
+      x: interviewX,
+      y: 2.65,
+      w: boxWidth,
+      h: 0.5,
+      fontSize: 9,
+      bold: true,
+      color: 'A855D7',
+      align: 'center',
+      valign: 'middle',
+      fontFace: 'Calibri'
+    });
+
+    if (idx < interviews.length - 1) {
+      slide8.addShape(pptx.ShapeType.rect, {
+        x: interviewX + boxWidth + 0.05,
+        y: 2.85,
+        w: 0.35,
+        h: 0.1,
+        fill: { color: '64748B' },
+        line: { type: 'none' }
+      });
+      interviewX += boxWidth + 0.4;
+    } else {
+      interviewX += boxWidth;
+    }
+  });
+
+  // Phenom enhancements
+  slide8.addText('Phenom Enhancements:', {
+    x: 0.5,
+    y: 3.5,
+    w: 12.33,
+    h: 0.25,
+    fontSize: 11,
+    bold: true,
+    color: '1E293B',
+    fontFace: 'Calabri'
+  });
+
+  const enhancements = [
+    { title: 'Smart Matching', desc: 'AI ranks candidates by skill-fit & cultural alignment' },
+    { title: 'Interview Insights', desc: 'Real-time feedback during interviews with AI notes' },
+    { title: 'Pipeline Nurturing', desc: 'Engage passive candidates over months/years' },
+    { title: 'Offer Analytics', desc: 'Predict acceptance rates and optimize packages' }
+  ];
+
+  enhancements.forEach((enh, idx) => {
+    const enhY = 3.9 + idx * 0.85;
+    slide8.addShape(pptx.ShapeType.rect, {
+      x: 0.7,
+      y: enhY,
+      w: 0.3,
+      h: 0.3,
+      fill: { color: 'A855D7' },
+      line: { type: 'none' }
+    });
+
+    slide8.addText('✓', {
+      x: 0.7,
+      y: enhY,
+      w: 0.3,
+      h: 0.3,
+      fontSize: 16,
+      bold: true,
+      color: 'FFFFFF',
+      align: 'center',
+      valign: 'middle',
+      fontFace: 'Calibri'
+    });
+
+    slide8.addText(enh.title, {
+      x: 1.15,
+      y: enhY,
+      w: 2.0,
+      h: 0.3,
+      fontSize: 10,
+      bold: true,
+      color: '1E293B',
+      align: 'left',
+      valign: 'middle',
+      fontFace: 'Calibri'
+    });
+
+    slide8.addText(enh.desc, {
+      x: 3.3,
+      y: enhY,
+      w: 9.0,
+      h: 0.3,
+      fontSize: 9,
+      color: '64748B',
+      align: 'left',
+      valign: 'middle',
+      fontFace: 'Calibri'
+    });
+  });
+
+  // ========== SLIDE 9: HIRING PROCESS - ZONE 4 (SPECIALIST) ==========
+  const slide9 = pptx.addSlide();
+  slide9.background = { color: 'FFFFFF' };
+
+  // Title
+  slide9.addText('Hiring Process — Zone 4', {
+    x: 0.5,
+    y: 0.3,
+    w: 12.33,
+    h: 0.4,
+    fontSize: 24,
+    bold: true,
+    color: '1E293B',
+    fontFace: 'Calibri'
+  });
+
+  slide9.addText('Specialist & Hard-to-Fill Roles', {
+    x: 0.5,
+    y: 0.75,
+    w: 12.33,
+    h: 0.3,
+    fontSize: 12,
+    color: '64748B',
+    fontFace: 'Calibri'
+  });
+
+  // Sourcing approach
+  slide9.addText('Sourcing Approach:', {
+    x: 0.5,
+    y: 1.15,
+    w: 12.33,
+    h: 0.25,
+    fontSize: 11,
+    bold: true,
+    color: '1E293B',
+    fontFace: 'Calibri'
+  });
+
+  const zone4Sources = ['CRM + Talent Pool Sourcing', 'Executive Recruiter Collaboration', 'Industry Community Partnerships'];
+  const zone4SourceX = [0.7, 4.0, 7.8];
+
+  zone4Sources.forEach((source, idx) => {
+    slide9.addShape(pptx.ShapeType.rect, {
+      x: zone4SourceX[idx],
+      y: 1.5,
+      w: 2.9,
+      h: 0.5,
+      fill: { color: '3B82F6' },
+      line: { color: '1E293B', width: 1 }
+    });
+
+    slide9.addText(source, {
+      x: zone4SourceX[idx],
+      y: 1.5,
+      w: 2.9,
+      h: 0.5,
+      fontSize: 9,
+      bold: true,
+      color: 'FFFFFF',
+      align: 'center',
+      valign: 'middle',
+      fontFace: 'Calibri'
+    });
+  });
+
+  // Interview process
+  slide9.addText('Interview & Assessment Process:', {
+    x: 0.5,
+    y: 2.25,
+    w: 12.33,
+    h: 0.25,
+    fontSize: 11,
+    bold: true,
+    color: '1E293B',
+    fontFace: 'Calibri'
+  });
+
+  const zone4Interviews = ['Phone Screen', 'Deep Technical', 'Scenario/Case Study', 'Expert Panel', 'Executive Round', 'Final Decision'];
+  let zone4IntX = 0.7;
+  zone4Interviews.forEach((int, idx) => {
+    const iw = 1.85;
+    slide9.addShape(pptx.ShapeType.rect, {
+      x: zone4IntX,
+      y: 2.6,
+      w: iw,
+      h: 0.55,
+      fill: { color: 'DBEAFE' },
+      line: { color: '3B82F6', width: 1 }
+    });
+
+    slide9.addText(int, {
+      x: zone4IntX,
+      y: 2.63,
+      w: iw,
+      h: 0.49,
+      fontSize: 8,
+      bold: true,
+      color: '3B82F6',
+      align: 'center',
+      valign: 'middle',
+      fontFace: 'Calibri'
+    });
+
+    if (idx < zone4Interviews.length - 1) {
+      slide9.addShape(pptx.ShapeType.rect, {
+        x: zone4IntX + iw + 0.02,
+        y: 2.83,
+        w: 0.25,
+        h: 0.08,
+        fill: { color: '64748B' },
+        line: { type: 'none' }
+      });
+      zone4IntX += iw + 0.27;
+    }
+  });
+
+  // Phenom for zone 4
+  slide9.addText('Phenom\'s Role in Zone 4:', {
+    x: 0.5,
+    y: 3.5,
+    w: 12.33,
+    h: 0.25,
+    fontSize: 11,
+    bold: true,
+    color: '1E293B',
+    fontFace: 'Calibri'
+  });
+
+  const zone4Features = [
+    { title: 'Talent Pool Intelligence', desc: 'Maintain 200+ qualified specialists in pipeline even when not hiring' },
+    { title: 'Expert Interview Coordination', desc: 'AI-assisted panel coordination, real-time feedback aggregation' },
+    { title: 'Long-Cycle Nurturing', desc: 'Engage passive candidates over 6-24 month cycles with tailored content' },
+    { title: 'Negotiation Support', desc: 'Offer prediction and acceptance modeling for competitive markets' }
+  ];
+
+  zone4Features.forEach((feat, idx) => {
+    const featY = 3.9 + idx * 0.85;
+    slide9.addShape(pptx.ShapeType.rect, {
+      x: 0.7,
+      y: featY,
+      w: 0.3,
+      h: 0.3,
+      fill: { color: '3B82F6' },
+      line: { type: 'none' }
+    });
+
+    slide9.addText('◆', {
+      x: 0.7,
+      y: featY,
+      w: 0.3,
+      h: 0.3,
+      fontSize: 14,
+      bold: true,
+      color: 'FFFFFF',
+      align: 'center',
+      valign: 'middle',
+      fontFace: 'Calibri'
+    });
+
+    slide9.addText(feat.title, {
+      x: 1.15,
+      y: featY,
+      w: 2.2,
+      h: 0.3,
+      fontSize: 10,
+      bold: true,
+      color: '1E293B',
+      align: 'left',
+      valign: 'middle',
+      fontFace: 'Calibri'
+    });
+
+    slide9.addText(feat.desc, {
+      x: 3.5,
+      y: featY,
+      w: 8.8,
+      h: 0.3,
+      fontSize: 9,
+      color: '64748B',
+      align: 'left',
+      valign: 'middle',
+      fontFace: 'Calibri'
+    });
+  });
+
+  // ========== SLIDE 10: ADAPTIVE MATURITY MODEL ==========
+  const slide10 = pptx.addSlide();
+  slide10.background = { color: 'FFFFFF' };
+
+  // Title
+  slide10.addText('Adaptive Maturity Model: Ambition Level', {
+    x: 0.5,
+    y: 0.3,
+    w: 12.33,
+    h: 0.4,
+    fontSize: 24,
+    bold: true,
+    color: '1E293B',
+    fontFace: 'Calibri'
+  });
+
+  // Maturity levels
+  const levels = [
+    { level: '0', name: 'Stone Age', desc: 'Manual, spreadsheet-based' },
+    { level: '1', name: 'Elimination', desc: 'Basic automation' },
+    { level: '2', name: 'Assimilation', desc: 'AI-assisted screening' },
+    { level: '3', name: 'Automation', desc: 'End-to-end automated workflows' },
+    { level: '4', name: 'Augmentation', desc: 'AI coaches & predictive' },
+    { level: '5', name: 'Domination', desc: 'Autonomous hiring agents' }
+  ];
+
+  const maturityX = 0.5;
+  const maturityY = 1.1;
+  const levelWidth = (12.33 - 0.4) / levels.length;
+
+  levels.forEach((lvl, idx) => {
+    const lvlX = maturityX + idx * levelWidth;
+    const isTarget = idx === 3;
+
+    // Column background
+    slide10.addShape(pptx.ShapeType.rect, {
+      x: lvlX,
+      y: maturityY,
+      w: levelWidth - 0.05,
+      h: 4.0,
+      fill: { color: isTarget ? 'FEF3C7' : 'F8FAFB' },
+      line: { color: isTarget ? brandColor : 'E2E8F0', width: isTarget ? 2 : 1 }
+    });
+
+    // Level number
+    slide10.addText(lvl.level, {
+      x: lvlX,
+      y: maturityY + 0.15,
+      w: levelWidth - 0.05,
+      h: 0.35,
+      fontSize: 18,
+      bold: true,
+      color: isTarget ? brandColor : '64748B',
+      align: 'center',
+      fontFace: 'Calibri'
+    });
+
+    // Level name
+    slide10.addText(lvl.name, {
+      x: lvlX + 0.05,
+      y: maturityY + 0.55,
+      w: levelWidth - 0.15,
+      h: 0.5,
+      fontSize: 11,
+      bold: true,
+      color: '1E293B',
+      align: 'center',
+      valign: 'top',
+      fontFace: 'Calibri'
+    });
+
+    // Description
+    slide10.addText(lvl.desc, {
+      x: lvlX + 0.05,
+      y: maturityY + 1.1,
+      w: levelWidth - 0.15,
+      h: 1.0,
+      fontSize: 9,
+      color: '64748B',
+      align: 'center',
+      valign: 'top',
+      fontFace: 'Calibri'
+    });
+  });
+
+  // Timeline markers
+  slide10.addText('Projected Path:', {
+    x: 0.5,
+    y: 5.25,
+    w: 12.33,
+    h: 0.25,
+    fontSize: 11,
+    bold: true,
+    color: '1E293B',
+    fontFace: 'Calibri'
+  });
+
+  const milestones = [
+    { month: 'Month 0', level: 'Now: Level 0.75', x: maturityX + 0.75 * levelWidth },
+    { month: 'Month 4', level: '2.5 (Moderate AI)', x: maturityX + 2.5 * levelWidth },
+    { month: 'Month 8', level: '3.0 (Full Automation)', x: maturityX + 3.0 * levelWidth },
+    { month: 'Month 18', level: '4.0 (Augmentation)', x: maturityX + 4.0 * levelWidth }
+  ];
+
+  milestones.forEach((mile, idx) => {
+    slide10.addShape(pptx.ShapeType.ellipse, {
+      x: mile.x - 0.15,
+      y: 5.6,
+      w: 0.3,
+      h: 0.3,
+      fill: { color: idx === 0 ? 'FF6B6B' : brandColor },
+      line: { color: '1E293B', width: 1 }
+    });
+
+    slide10.addText(mile.level, {
+      x: mile.x - 0.6,
+      y: 6.0,
+      w: 1.2,
+      h: 0.35,
+      fontSize: 9,
+      bold: true,
+      color: '1E293B',
+      align: 'center',
+      fontFace: 'Calibri'
+    });
+  });
+
+  // ========== SLIDE 11: EXECUTIVE MAPPING ==========
+  const slide11 = pptx.addSlide();
+  slide11.background = { color: 'FFFFFF' };
+
+  // Title
+  slide11.addText('Executive Mapping', {
+    x: 0.5,
+    y: 0.3,
+    w: 12.33,
+    h: 0.4,
+    fontSize: 24,
+    bold: true,
+    color: '1E293B',
+    fontFace: 'Calibri'
+  });
+
+  // Build executive cards from data
+  const executives = account.executives || [];
+  const execsToShow = executives.slice(0, 4);
+  const execPerRow = 2;
+
+  execsToShow.forEach((exec, idx) => {
+    const row = Math.floor(idx / execPerRow);
+    const col = idx % execPerRow;
+
+    const execX = 0.5 + col * 6.3;
+    const execY = 1.1 + row * 2.7;
+    const execW = 6.0;
+    const execH = 2.5;
+
+    // Executive card
+    slide11.addShape(pptx.ShapeType.rect, {
+      x: execX,
+      y: execY,
+      w: execW,
+      h: execH,
+      fill: { color: 'FFFFFF' },
+      line: { color: 'E2E8F0', width: 1 },
+      shadow: cardShadow()
+    });
+
+    // Left border
+    slide11.addShape(pptx.ShapeType.rect, {
+      x: execX,
+      y: execY,
+      w: 0.08,
+      h: execH,
+      fill: { color: brandColor },
+      line: { type: 'none' }
+    });
+
+    // Name & title
+    slide11.addText(exec.name || 'Executive', {
+      x: execX + 0.15,
+      y: execY + 0.15,
+      w: execW - 0.3,
+      h: 0.3,
+      fontSize: 12,
+      bold: true,
+      color: '1E293B',
+      align: 'left',
+      fontFace: 'Calibri'
+    });
+
+    slide11.addText(exec.title || 'Title', {
+      x: execX + 0.15,
+      y: execY + 0.48,
+      w: execW - 0.3,
+      h: 0.25,
+      fontSize: 10,
+      color: brandColor,
+      align: 'left',
+      fontFace: 'Calibri'
+    });
+
+    // Role type badge
+    if (exec.roleType) {
+      slide11.addShape(pptx.ShapeType.rect, {
+        x: execX + 0.15,
+        y: execY + 0.78,
+        w: 1.2,
+        h: 0.22,
+        fill: { color: brandColorLight },
+        line: { color: brandColor, width: 0.5 }
+      });
+
+      slide11.addText(exec.roleType, {
+        x: execX + 0.15,
+        y: execY + 0.78,
+        w: 1.2,
+        h: 0.22,
+        fontSize: 8,
+        color: brandColor,
+        align: 'center',
+        valign: 'middle',
+        fontFace: 'Calibri'
+      });
+    }
+
+    // Key priorities
+    const priList = exec.priorities ? (typeof exec.priorities === 'string' ? [exec.priorities] : exec.priorities) : [];
+    const priText = priList.slice(0, 2).join(' • ');
+
+    slide11.addText(truncate(priText, 120), {
+      x: execX + 0.15,
+      y: execY + 1.08,
+      w: execW - 0.3,
+      h: 0.7,
+      fontSize: 9,
+      color: '64748B',
+      align: 'left',
+      valign: 'top',
+      fontFace: 'Calibri'
+    });
+
+    // Key quote
+    if (exec.keyQuote) {
+      slide11.addText(`"${truncate(exec.keyQuote, 100)}"`, {
+        x: execX + 0.15,
+        y: execY + 1.85,
+        w: execW - 0.3,
+        h: 0.55,
+        fontSize: 9,
+        italic: true,
+        color: '1E293B',
+        align: 'left',
+        valign: 'top',
+        fontFace: 'Calibri'
+      });
+    }
+  });
+
+  // Footer note
+  slide11.addText('Outreach & engagement approach customized per executive based on priorities and decision-making style', {
+    x: 0.5,
+    y: 6.8,
+    w: 12.33,
+    h: 0.5,
+    fontSize: 10,
+    color: '64748B',
+    align: 'center',
+    fontFace: 'Calibri'
+  });
+
+  // ========== SLIDE 12: NEXT STEPS & DISCOVERY ==========
+  const slide12 = pptx.addSlide();
+  slide12.background = { color: 'FFFFFF' };
+
+  // Title
+  slide12.addText('Next Steps & Discovery', {
+    x: 0.5,
+    y: 0.3,
+    w: 12.33,
+    h: 0.4,
+    fontSize: 24,
+    bold: true,
+    color: '1E293B',
+    fontFace: 'Calibri'
+  });
+
+  // Next steps section
+  slide12.addText('Recommended Next Steps:', {
+    x: 0.5,
+    y: 1.0,
+    w: 5.8,
+    h: 0.3,
+    fontSize: 12,
+    bold: true,
+    color: '1E293B',
+    fontFace: 'Calibri'
+  });
+
+  const stepsText = account.nextSteps || 'Schedule initial discovery meeting to align on hiring challenges and Phenom solution fit.\nConduct deep-dive assessment of current talent workflows.\nDevelop implementation roadmap and quick-win opportunities.';
+
+  slide12.addText(stepsText, {
+    x: 0.5,
+    y: 1.4,
+    w: 5.8,
+    h: 2.8,
+    fontSize: 10,
+    color: '1E293B',
+    align: 'left',
+    valign: 'top',
+    fontFace: 'Calibri'
+  });
+
+  // Discovery questions section
+  slide12.addText('Key Discovery Questions:', {
+    x: 6.8,
+    y: 1.0,
+    w: 5.8,
+    h: 0.3,
+    fontSize: 12,
+    bold: true,
+    color: '1E293B',
+    fontFace: 'Calibri'
+  });
+
+  const questionsArray = Array.isArray(account.discoveryQuestions)
+    ? account.discoveryQuestions
+    : (account.discoveryQuestions ? [account.discoveryQuestions] : []);
+  const questionsText = questionsArray.slice(0, 5).map((q, i) => `${i + 1}. ${q}`).join('\n');
+
+  slide12.addText(questionsText, {
+    x: 6.8,
+    y: 1.4,
+    w: 5.8,
+    h: 2.8,
+    fontSize: 9,
+    color: '1E293B',
+    align: 'left',
+    valign: 'top',
+    fontFace: 'Calibri'
+  });
+
+  // Footer boxes
+  const footerBoxY = 4.5;
+  const footerItems = [
+    { label: 'Primary Sponsor', value: account.primarySponsor || 'To be identified' },
+    { label: 'Secondary Contacts', value: account.secondaryContacts || 'To be identified' },
+    { label: 'Timeline', value: account.stage === 'Early' ? '6-12 months' : '3-6 months' }
+  ];
+
+  footerItems.forEach((item, idx) => {
+    const footerX = 0.5 + idx * 4.2;
+    slide12.addShape(pptx.ShapeType.rect, {
+      x: footerX,
+      y: footerBoxY,
+      w: 4.0,
+      h: 1.5,
+      fill: { color: 'F8FAFB' },
+      line: { color: brandColor, width: 1 }
+    });
+
+    slide12.addText(item.label, {
+      x: footerX + 0.15,
+      y: footerBoxY + 0.15,
+      w: 3.7,
+      h: 0.25,
+      fontSize: 9,
+      bold: true,
+      color: brandColor,
+      align: 'left',
+      fontFace: 'Calibri'
+    });
+
+    slide12.addText(item.value, {
+      x: footerX + 0.15,
+      y: footerBoxY + 0.45,
+      w: 3.7,
+      h: 0.8,
+      fontSize: 10,
+      color: '1E293B',
+      align: 'left',
+      valign: 'top',
+      fontFace: 'Calibri'
+    });
+  });
+
+  // Confidential footer
+  slide12.addText('PHENOM CONFIDENTIAL', {
+    x: 0.5,
+    y: 6.9,
+    w: 12.33,
+    h: 0.3,
+    fontSize: 10,
+    color: '64748B',
+    align: 'center',
+    fontFace: 'Calibri'
+  });
+
+  // ========== GENERATE & DOWNLOAD ==========
+  try {
+    const pptxBlob = await pptx.write({ outputType: 'blob' });
+    const filename = `${(account.companyName || 'Company').replace(/\s+/g, '_')}_Prospect_Keynote.pptx`;
+    dlBlob(pptxBlob, filename);
+  } catch (err) {
+    console.error('Error generating PPTX:', err);
+    alert('Error generating presentation. Check console for details.');
+  }
+}
+
+// ─── Shared HTML generator (used by both PDF and print) ──────────────────────
+ // ─── Shared HTML generator (used by both PDF and print) ──────────────────────
 function buildAccountHTML(account) {
   var fields = [
     ["Industry", account.industry],
@@ -1628,6 +3183,7 @@ const pumaAccount = {
 };
 const acc2 = {
   ...emptyAccount(2, "Deutsche Bahn"),
+  brandColor: "EC0016",
   cioProblems:
     "Dr. Daniela Gerd tom Markotten (Board, Digitalisation & Technology since Sept 2021) leads DB Systel (10,000+ staff) but HR-IT integration lags behind operational AI. DB GPT deployed to 10,000+ users for operational use — but HR applications (recruiting, career matching) are absent from the roadmap. Legacy LMS: 22,700+ courses unlinked to skills catalogue; AI-based mapping only beginning. DB Smile chatbot for job applications indicates ATS is underpowered. 'Meine DB' self-service portal launched but procurement/succession planning still manual. Skills taxonomy covering 7,000+ job profiles only completed 2024 — now needs a platform to activate it.",
   chroProblems:
@@ -1765,7 +3321,7 @@ const acc2 = {
     },
     {
       name: "Dr. Daniela Gerd tom Markotten",
-      title: "Former Executive Board — Digitalisation & Technology (departed 2025)",
+      title: "DEPARTED — Digitalisation & Technology Executive Board (2025)",
       roleType: "Tech Oversight",
       background:
         "⚠️ DEPARTED: Dr. Daniela Gerd tom Markotten left the Deutsche Bahn Executive Board during the 2025 restructuring. Was Board Member for Digitalisation & Technology since September 2021. Led DB Systel (10,000+ employees) and drove DB GPT deployment. Successor and current technology board responsibilities need verification — may have been redistributed across remaining board members.",
@@ -1823,6 +3379,7 @@ const acc2 = {
 };
 const acc3 = {
   ...emptyAccount(3, "Schwarz Group (Lidl/Kaufland)"),
+  brandColor: "0050AA",
   cioProblems:
     "CDO Rolf Schumann (Co-CEO Schwarz Digits, ex-SAP) leads Stackit cloud and internal AI — but HR tech stack for 595,000+ employees is not publicly disclosed, likely SAP-based and fragmented across Lidl, Kaufland, Schwarz Produktion, PreZero, and Digits independently. No unified ATS or talent CRM found across brands. Retail hiring (store associates) and tech hiring (Stackit cloud/AI engineers) require fundamentally different recruiting workflows that a single legacy system cannot serve. No evidence of AI-powered sourcing or proactive talent pipeline despite Stackit's sophistication.",
   chroProblems:
@@ -2004,6 +3561,7 @@ const acc3 = {
 };
 const acc4 = {
   ...emptyAccount(4, "Adidas"),
+  brandColor: "000000",
   cioProblems:
     "CIO transition: Andreas Hubert left to Puma (Jun 2025); Fumbi Chima joins as CIO Jan 2026 (ex-Fox Networks, Burberry, Walmart Asia) — 6-month leadership vacuum in HR-IT integration. No specific ATS or HRIS vendor publicly named; Michelle Robertson's 2024 P&C Board appointment signals overhaul intent but no Workday/SuccessFactors upgrade announced. Skills taxonomy gap cited in 2024 Annual Report: comprehensive skill mapping not yet complete, hindering job clarity and career development. Fumbi Chima's media/retail tech background creates opportunity to reset the talent tech stack from day 1 in January 2026.",
   chroProblems:
@@ -2139,7 +3697,7 @@ const acc4 = {
     },
     {
       name: "Fumbi Chima",
-      title: "Chief Information Officer",
+      title: "⚠️ UNVERIFIED — Chief Information Officer (verify current status before outreach)",
       roleType: "Tech Oversight",
       background:
         "Joining Adidas as CIO from January 2026 — replacing Andreas Hubert who moved to Puma (June 2025). Background: CIO at Fox Networks Group (global media tech), CDO at Burberry (luxury digital transformation), CIO/CDO at Walmart Asia (retail tech at scale). Rare profile: media + luxury + mass retail CIO experience. Adidas represents her first sportswear/FMCG technology mandate. Starting January 2026 with a clean slate — no legacy attachment to current systems or past vendor decisions.",
@@ -2154,7 +3712,7 @@ const acc4 = {
   
     {
       name: "Steve Bonomo",
-      title: "VP Global Talent Acquisition",
+      title: "⚠️ UNVERIFIED — VP Global Talent Acquisition (may have departed; verify before outreach)",
       roleType: "Key Influencer",
       department: "Talent Acquisition",
       background: "VP Global Talent Acquisition at Adidas. Leads worldwide recruiting strategy across all markets and functions.",
@@ -2197,6 +3755,7 @@ const acc4 = {
 };
 const acc5 = {
   ...emptyAccount(5, "EDEKA"),
+  brandColor: "1A3E72",
   cioProblems:
     "No dedicated CIO or CDO publicly identified; EDEKA's decentralised cooperative structure means HR tech likely fragmented across 8 regional cooperatives with no unified HRIS. Peter Keitel (combined CFO+HR since Jan 2024) brings audit/finance lens, not HR tech vision. No Workday/SuccessFactors/SAP SuccessFactors implementation announced despite 413,000 employees — regional co-ops likely run separate payroll and ATS systems. No Chief Data Officer or people analytics function visible. GDPR compliance and supply chain due diligence laws increasing HR data governance burden with no central system.",
   chroProblems:
@@ -2372,6 +3931,7 @@ const acc5 = {
 };
 const acc6 = {
   ...emptyAccount(6, "ALDI Süd"),
+  brandColor: "00205B",
   cioProblems:
     "ALDI Süd uses SAP SuccessFactors (core HR/learning) + Workday Recruiting (ATS) + ServiceNow — fragmented, unintegrated stack evidenced by job postings seeking 'Software Architect HR IT — Recruiting & Learning'. No unified talent CRM. No evidence of AI-powered sourcing or candidate relationship management despite 700,000+ applications per year for 65,000 German jobs alone. No Chief Data Officer or HR analytics function publicly disclosed. Private company structure limits investment visibility but integration gap is evident from system fragmentation.",
   chroProblems:
@@ -2537,6 +4097,7 @@ const acc6 = {
 };
 const acc7 = {
   ...emptyAccount(7, "Fraport AG"),
+  brandColor: "003366",
   cioProblems:
     "HRneo transformation programme (2023-2025): new benefits, flexible work, bonus redesign — but underlying HR tech stack not publicly disclosed. No evidence of AI-powered recruiting, talent CRM, or career portal despite 8,000+ annual hiring target. AI@Fraport programme active under Julia Kranenberg's mandate — operational AI deployed, but HR applications absent from public scope. Terminal 3 (April 2026 opening) will require 1,500-2,000 new hires across aviation security, retail, and operations within 12-18 months — current systems not sized for this ramp.",
   chroProblems:
@@ -2668,7 +4229,7 @@ const acc7 = {
     },
     {
       name: "Dr. Wolfgang Standhaft",
-      title: "Chief Information Officer",
+      title: "⚠️ UNVERIFIED — CIO (not found in 2026 Vorstand; Dietmar Focke joining as COO May 2026)",
       roleType: "Tech Oversight",
       background:
         "CIO at Fraport since January 2019. Previously: Global Group CIO at HeidelbergCement (now Heidelberg Materials) for 10+ years — one of the world's largest construction materials companies, managing IT across 60+ countries. Drives digital transformation of Frankfurt Airport operations: AI for passenger flow optimisation, baggage tracking, retail management, and digital gate management. CGI partnership (announced 2024) for IT infrastructure modernisation. Publicly active on airport AI and cloud strategy.",
@@ -2714,6 +4275,7 @@ const acc7 = {
 };
 const acc8 = {
   ...emptyAccount(8, "E.ON SE"),
+  brandColor: "EA1B0A",
   cioProblems:
     "Victoria Ossadnik (Board COO-Digital, Fortune Tech Leaders Europe 2024) launched E.ON GPT for all 74,000 employees — but HR-specific use cases (recruiting, onboarding, talent matching) are absent from the public roadmap. Infosys AI-powered workplace transformation partnership announced 2025 — public acknowledgment that internal HR/productivity systems are not competitive. 10M customer accounts migrated to cloud but internal HR systems cloud status undisclosed. €41B grid investment requires 10,000+ field technician hires through 2028 — current ATS not evidenced as capable of technical sourcing at this volume or specialisation.",
   chroProblems:
@@ -2890,6 +4452,7 @@ const acc8 = {
 };
 const acc9 = {
   ...emptyAccount(9, "BMW Group"),
+  brandColor: "1C69D4",
   industry: "Automotive & Mobility",
   priority: "High",
   revenue: "€154.1B (2024)",
@@ -2907,8 +4470,8 @@ const acc9 = {
   secondaryContacts: "Frank Weber (CTO) / Alexander Buresch (CIO)",
   executives: [
     { name: "Ilka Horstmeier", title: "Member of the Board of Management, Human Resources and Real Estate", roleType: "Primary Sponsor", department: "HR Leadership", background: "Board member since 2021. Former Head of BMW Plant Munich. Deep manufacturing background with focus on workforce transformation for electrification.", priorities: "Workforce transformation for Neue Klasse, upskilling 149K employees for EV/digital, employer branding for tech talent, diversity and inclusion.", keyQuote: "", relevance: "Primary decision-maker for all HR technology investments at BMW Group. Her manufacturing background means she understands operational workforce challenges firsthand.", outreachAngles: "Neue Klasse workforce readiness | AI-powered talent matching for EV skill shift", linkedinUrl: "", reportsTo: "Oliver Zipse (CEO)" },
-    { name: "Frank Weber", title: "Member of the Board of Management, Development", roleType: "Tech Oversight", department: "IT / Digital", background: "Board member for Development/CTO. Leading Neue Klasse vehicle architecture and software-defined vehicle strategy.", priorities: "Neue Klasse platform, software-defined vehicles, autonomous driving, digital engineering talent.", keyQuote: "", relevance: "Drives the demand signal — his technology vision creates the talent gap that HR must fill.", outreachAngles: "Software talent pipeline for Neue Klasse | Engineering talent retention in EV transition", linkedinUrl: "", reportsTo: "Oliver Zipse (CEO)" },
-    { name: "Alexander Buresch", title: "CIO & SVP IT", roleType: "Tech Oversight", department: "IT / Digital", background: "CIO at BMW Group. Responsible for enterprise IT, digital workplace, data platforms.", priorities: "Cloud transformation, AI/ML platform, data-driven manufacturing, digital workplace modernisation.", keyQuote: "", relevance: "Technology buyer who owns the IT landscape. Any HR tech platform must integrate with his digital ecosystem.", outreachAngles: "AI-powered HR platform fits digital workplace vision | Data integration with BMW's enterprise architecture", linkedinUrl: "", reportsTo: "Oliver Zipse (CEO)" },
+    { name: "Frank Weber", title: "DEPARTED — Member of the Board of Management, Development (replaced by Joachim Post, March 2025)", roleType: "Tech Oversight", department: "IT / Digital", background: "Board member for Development/CTO. Leading Neue Klasse vehicle architecture and software-defined vehicle strategy.", priorities: "Neue Klasse platform, software-defined vehicles, autonomous driving, digital engineering talent.", keyQuote: "", relevance: "Drives the demand signal — his technology vision creates the talent gap that HR must fill.", outreachAngles: "Software talent pipeline for Neue Klasse | Engineering talent retention in EV transition", linkedinUrl: "", reportsTo: "Oliver Zipse (CEO)" },
+    { name: "Alexander Buresch", title: "DEPARTED — CIO & SVP IT (replaced by Franz Decker, August 2025)", roleType: "Tech Oversight", department: "IT / Digital", background: "CIO at BMW Group. Responsible for enterprise IT, digital workplace, data platforms.", priorities: "Cloud transformation, AI/ML platform, data-driven manufacturing, digital workplace modernisation.", keyQuote: "", relevance: "Technology buyer who owns the IT landscape. Any HR tech platform must integrate with his digital ecosystem.", outreachAngles: "AI-powered HR platform fits digital workplace vision | Data integration with BMW's enterprise architecture", linkedinUrl: "", reportsTo: "Oliver Zipse (CEO)" },
   ],
   challenges: [
     { severity: "CRITICAL", title: "EV Talent Transition", businessChallenge: "Neue Klasse launch requires thousands of software, battery, and EV engineers — a completely different talent profile than BMW's traditional workforce.", solution: "AI-powered talent matching to identify transferable skills internally and source EV-specific talent externally.", proofPoint: "" },
@@ -2918,6 +4481,7 @@ const acc9 = {
 };
 const acc10 = {
   ...emptyAccount(10, "REWE Group"),
+  brandColor: "CC071E",
   cioProblems:
     "CDTO Christoph Eltze (Board since Jul 2022) driving omnichannel and loyalty digitisation — but HR tech modernisation is not named in the public digital roadmap. 'Smarter Work in the Market' project examines AI for store operations, not recruiting. No ATS or talent CRM publicly disclosed despite 160,000 employees and ~65,000 annual hires estimated from vacancy volume. Analytics Factory (structured data environment) built for customer/commercial data — no HR/talent analytics use case published. €16B capex plan (2024-2028) allocates to 'digitalization' broadly — HR tech explicitly excluded from current scope.",
   chroProblems:
@@ -3098,6 +4662,7 @@ const acc10 = {
 };
 const acc11 = {
   ...emptyAccount(11, "TUI AG"),
+  brandColor: "D40E14",
   cioProblems:
     "Legacy regional IT fragmentation: consolidated to AWS + Snowflake + microservices but ATS and HR systems not named in transformation roadmap. 2,500 IT staff globally managing transition while maintaining legacy systems. Paradox AI deployed (confirmed research brief) but full scope across 67,000 employees not documented. Digital Hub Porto launched (200 tech roles by end 2024, now 260+) — rapid tech hiring requires a modern talent CRM to source specialists against FAANG competition. No integrated talent marketplace connecting hotels/cruise/airline talent across divisions — internal mobility between TUI Blue, Mein Schiff, and TUI Musement is effectively invisible.",
   chroProblems:
@@ -3288,6 +4853,7 @@ const acc11 = {
 };
 const acc12 = {
   ...emptyAccount(12, "Deutsche Telekom"),
+  brandColor: "E20074",
   cioProblems:
     "Incoming CIO KD Ahluwalia (Aug 2025, ex-DT B2C CIO, Airtel, Wipro) replaces Peter Leukert (8-year tenure) — greenfield mandate on IT strategy at transition moment. EightFold AI deployed since 2021 for resource management + internal opportunity marketplace — but 'Growth Hub' AI platform trial (2024) bundling recruiting, skills, talent management signals current fragmentation across those use cases. 149,000 IT vacancies in Germany (2024); DT competes for same talent it serves — ATS and employer brand must outperform the market it supplies. 50,000 employees completed skills management process (2024) — talent data rich but activation platform not unified.",
   chroProblems:
@@ -3479,6 +5045,7 @@ const acc12 = {
 };
 const acc13 = {
   ...emptyAccount(13, "Flix SE"),
+  brandColor: "73D700",
   cioProblems:
     "Dr. Hanna Huber appointed SVP Technology Apr 2024 (Daniel Krauss stepping back from CIO role) — new tech leader onboarding to Flix's complex proprietary platform (1,600+ destinations, dynamic pricing, 300,000+ daily connections). No named ATS or HR tech system in public sources — likely legacy or point-solution for a company that grew from startup to €2B+ without enterprise HR infrastructure. IPO postponed (May 2024): future public reporting requirements will demand people analytics and talent metrics not currently tracked systematically. Greyhound integration (2021): US system harmonisation likely incomplete after 3 years.",
   chroProblems:
@@ -3681,6 +5248,7 @@ const acc13 = {
 };
 const acc14 = {
   ...emptyAccount(14, "Otto Group"),
+  brandColor: "E63312",
   cioProblems:
     "ogGPT (Azure OpenAI, Sept 2023): 7,000+ active monthly users, 300,000 interactions/month, targeting 26,000-27,000 users DACH — but HR-specific use cases (recruiting, talent matching) not documented in public scope. No CIO publicly named; tech reporting structure post-Scharner-Wolff's CEO appointment (Mar 2025) unclear. GitHub Copilot rolled out to all developers — AI culture proven. About You restructuring (profitable Q1 2024): legacy About You HR systems need integration into Otto Group stack. Portfolio complexity: OTTO.de, About You, Bonprix, EOS — no unified talent marketplace across brands.",
   chroProblems:
@@ -3857,6 +5425,7 @@ const acc14 = {
 };
 const acc15 = {
   ...emptyAccount(15, "HHLA"),
+  brandColor: "003A70",
   cioProblems:
     "Social/change collective agreement with ver.di (Jan 2025): implementing digital shift management system — current scheduling is paper-based or legacy digital; no integrated workforce management platform. No CIO/CDO publicly named; tech embedded in operations (COO). AGV (Automated Guided Vehicles) and FERNRIDE autonomous tractors certified (TÜV SÜD, 2024) — automation requires new role profiles (automation technicians, fleet supervisors) that standard ATS cannot source or assess. MSC joint venture (Nov 2024): new 49.9% owner's tech standards and workflows need harmonisation with HHLA's legacy port management systems. Odessa + Tallinn international terminals: multi-jurisdiction HR management without unified platform.",
   chroProblems:
@@ -4046,6 +5615,7 @@ const acc15 = {
 };
 const acc16 = {
   ...emptyAccount(16, "Hapag-Lloyd"),
+  brandColor: "FF6600",
   cioProblems:
     "Donya-Florence Amer holds dual CIO + CHRO role (since May 2022, contract to Jan 2030) — single decision-maker for both tech and people. Uses softgarden ATS but no enterprise talent CRM or AI-powered sourcing evidenced. Kyndryl IT modernisation contract (2024): legacy infrastructure being modernised — window for HR tech stack upgrade alongside IT renewal. Gemini Cooperation with Maersk (Feb 2025): new alliance scheduling and operational systems require workforce coordination across 60/40 fleet split — no joint workforce management platform. Manual data entry still required in parallel with digital navigation systems — HR-IT integration lags behind commercial digitisation.",
   chroProblems:
@@ -4222,6 +5792,7 @@ const acc16 = {
 };
 const acc17 = {
   ...emptyAccount(17, "Ceconomy / MediaMarktSaturn"),
+  brandColor: "DF0000",
   cioProblems:
     "No unified ATS or talent CRM evidenced across 1,000+ stores in 11 countries. Omnichannel transformation requires hybrid-skilled workforce (digital + physical retail) — HR systems designed for single-channel roles cannot support dual-skill job architecture. GoodHabitz partnership (100+ online courses) suggests L&D was fragmented; centralising but no unified skills taxonomy or competency management platform visible. Multi-country HR data: Germany, Austria, Spain, Italy, Hungary, Netherlands, Poland with separate payroll and likely separate ATS systems — no GDPR-compliant unified platform disclosed. E-commerce growth (7.3% YoY to €5.1B online) requires data-driven talent sourcing for digital roles not supported by current retail-focused recruitment processes.",
   chroProblems:
@@ -4337,7 +5908,7 @@ const acc17 = {
   executives: [
     {
       name: "Dr. Kai-Ulrich Deissner → Remko Rijnders (July 2026)",
-      title: "CEO & Labour Director (transitioning — Remko Rijnders succeeds July 1, 2026)",
+      title: "DEPARTED — resigned March 2026; Remko Rijnders succeeds July 1, 2026",
       roleType: "Executive Sponsor",
       background:
         "⚠️ CEO TRANSITION: Dr. Kai-Ulrich Deissner announced resignation in early 2026 and will step down during the year. Remko Rijnders (previously Group CFO) has been appointed as successor CEO effective July 1, 2026. Deissner was CEO since May 2025 (was CFO since Feb 2023). Deissner's background: Deutsche Telekom CTO, physics doctorate, McKinsey/BCG consulting. Rijnders brings financial and operational expertise from the CFO seat — expect continued cost-efficiency and data-driven approach to HR technology investments.",
@@ -4396,6 +5967,7 @@ const acc17 = {
 };
 const acc18 = {
   ...emptyAccount(18, "Vonovia SE"),
+  brandColor: "003D6B",
   cioProblems:
     "New CEO Luka Mucic (Jan 2026, ex-Vodafone CFO, SAP COO) brings tech and efficiency orientation — HR systems rationalisation likely on his first 100-day agenda. Deutsche Wohnen merger integration (complete 2023): two separate HRIS, payroll, and talent systems now partly harmonised but successor platform not publicly confirmed. Digital tenant portal + employee file digitisation (2024) = signs of legacy paper-based processes. No modern ATS or talent CRM evidenced despite 2,800 planned new hires in 2025. Vonovia Skilled Trades Academy (Berlin, launched May 2025): 220 trainees/year capacity — requires digital onboarding, skills tracking, and career pathway systems not currently in place.",
   chroProblems:
@@ -4606,6 +6178,7 @@ const acc18 = {
 };
 const acc19 = {
   ...emptyAccount(19, "LEG Immobilien SE"),
+  brandColor: "005CA9",
   cioProblems:
     "No dedicated CIO or CDO identified — IT embedded under CEO (Lars von Lackum, through Dec 2025). 2,087 employees across 8 NRW branch offices: likely fragmented HR tech with no unified HRIS, ATS, or talent management platform. Brack Capital Properties acquisition (9,100 units, Jan 2025): integration of additional staff without dedicated integration systems. ESRS sustainability reporting (2024 mandatory): HR data governance requirements now public — current systems may not produce required workforce metrics. Small company scale (2,087 FTE) limits HR tech investment — but decentralised 8-office model creates disproportionate management complexity without a unified platform.",
   chroProblems:
@@ -4774,6 +6347,7 @@ const acc19 = {
 };
 const acc20 = {
   ...emptyAccount(20, "RWE AG"),
+  brandColor: "003A79",
   industry: "Energy & Utilities",
   cioProblems:
     "Katja van Doren (CHRO + Labour Director + IT + Internal Audit since Aug 2023, extended to Jul 2029) holds IT alongside HR — single executive overseeing both domains. Coal decommissioning (5 lignite units 2024) + renewables hiring (+730 FTE H1 2024) simultaneously requires workforce transition management at scale — legacy coal HRIS systems not built for rapid redeployment. Geographic expansion (new Germany onshore offices, London, USA): international talent acquisition without a global talent CRM. €55B renewable investment (2024-2030) requires 2GW/year capacity build — technical recruiting for offshore wind, solar, battery, hydrogen at scale not supported by current ATS evidenced in public disclosures.",
@@ -4959,6 +6533,7 @@ const acc20 = {
 };
 const acc21 = {
   ...emptyAccount(21, "Bertelsmann"),
+  brandColor: "003C71",
   cioProblems:
     "Acquired Milch & Zucker (HR solutions provider) + Vocanto (e-learning platform, eff. Jan 2025) — signals CIO recognition of internal HR tech debt. Group-wide HR reporting and people analytics architecture only beginning in 2024 — legacy: each division (RTL, PRH, Arvato, BMG, Education) historically operated separate HR systems. CSRD compliance (2024): forced HR system overhaul for ESG workforce metrics — previously undisclosed people data now externally reported. Arvato BPO: 63% turnover reduction achieved via realistic job previews (documented case) — but the underlying system that manages this at scale for 100,000+ Arvato employees is not an enterprise-grade talent platform.",
   chroProblems:
@@ -5144,6 +6719,7 @@ const acc21 = {
 };
 const acc22 = {
   ...emptyAccount(22, "ProSiebenSat.1"),
+  brandColor: "E6007E",
   cioProblems:
     "CHRO vacant since Christine Scheffler departure March 31, 2024 — no replacement named. MFE (MediaForEurope) takeover Oct 2025: Marco Giordani new CEO, COO role eliminated, executive board restructured — HR tech strategy undefined under new ownership. Repeated layoffs (400 Jul 2023 + 430 May 2025): HRIS/payroll integration through two redundancy waves across multiple divisions. Fragmented portfolio: Seven.One Entertainment, Joyn, ParshipMeet, SevenVentures, NuCom each with separate HR systems — no unified talent marketplace across brands. Joyn streaming launch: new content/tech platform requires digital talent profiles that legacy broadcaster ATS cannot source.",
   chroProblems:
@@ -5319,6 +6895,7 @@ const acc22 = {
 };
 const acc23 = {
   ...emptyAccount(23, "Bechtle AG"),
+  brandColor: "004F9F",
   cioProblems:
     "CHRO not publicly named; no enterprise HR tech stack disclosed. 6 acquisitions FY2024 (Germany ×2, UK, Spain, Italy, and more) = 531 new employees integrated: payroll harmonisation, ATS migration, and cultural onboarding across 5 countries simultaneously. 70,000+ B2B clients served: customer-facing IT consultants require technical certifications (Microsoft, Cisco, HPE) — credential tracking not handled by standard HRIS. No mention of AI-powered sourcing or talent CRM despite competing for engineers against AWS, Microsoft, Google in Germany, UK, and France. Trainee ratio 6.7% (target 10% by 2030): long-pipeline model creates 3-year lag between demand signal and talent availability.",
   chroProblems:
@@ -5506,6 +7083,7 @@ const acc23 = {
 };
 const acc24 = {
   ...emptyAccount(24, "TÜV SÜD"),
+  brandColor: "0063A3",
   cioProblems:
     "Markus Kreysa appointed Head of People Germany (May 2025, ex-Siemens global talent acquisition) — newly created role for 14,000+ Germany employees; signals previous HR capacity gap. 30,000 global employees across 50+ countries: no disclosed unified HRIS or global ATS — Asia-Pacific (+13.3% revenue growth) likely straining Germany-centric HR infrastructure. No named ATS or talent CRM; certification/testing sector requires credential tracking across IATF 16949, ISO, VDA, MDR — standard HRIS cannot manage. Legacy HR reporting: CSRD compliance (FY2024) forced workforce data disclosure — current systems may not produce required metrics without significant rework.",
   chroProblems:
@@ -5639,7 +7217,7 @@ const acc24 = {
     },
     {
       name: "Stefan Domsch",
-      title: "Chief Information Officer (departed July 2024 — VERIFY CURRENT CIO)",
+      title: "DEPARTED — CIO (left July 2024 for Synlab as Group CIO)",
       roleType: "Tech Oversight",
       background:
         "CIO at TÜV SÜD AG. Publicly active on digital transformation and TÜV AI.Lab initiatives — AI-powered digital testing and certification services. TÜV SÜD's AI.Lab is positioned as a commercial service: certifying AI systems for third parties (automotive, medical devices, financial services). This creates a unique dynamic: TÜV SÜD must adopt AI internally at the same standard it applies externally, or risk credibility challenges from clients.",
@@ -5684,6 +7262,7 @@ const acc24 = {
 };
 const acc25 = {
   ...emptyAccount(25, "O Boticário Group"),
+  brandColor: "00A651",
   cioProblems:
     "19,000 direct employees + 15,000+ franchise partners with no unified HR tech platform evidenced — franchise network managed separately from company operations. No named ATS or talent CRM across beauty retail franchise network. R$4.14B factory expansion (Minas Gerais, 4 years): production workforce scaling requires industrial hiring pipeline not currently documented. AI/tech talent hiring accelerating (AI engineers, data analysts, UX): competing with Brazilian fintechs, XP Investimentos, Nubank, Mercado Livre for same São Paulo tech talent. ESG Report 2024: diversity tracking across 19,000 employees + franchise partners requires data infrastructure not evidenced at franchise level.",
   chroProblems:
@@ -5987,6 +7566,7 @@ const acc25 = {
 };
 const acc26 = {
   ...emptyAccount(26, "METRO AG"),
+  brandColor: "003DA5",
   industry: "Wholesale & Food Distribution",
   priority: "Medium",
   revenue: "€30.6B (FY 2023/24)",
@@ -6014,6 +7594,7 @@ const acc26 = {
 };
 const acc27 = {
   ...emptyAccount(27, "Douglas"),
+  brandColor: "000000",
   industry: "Beauty & Retail",
   priority: "Medium",
   revenue: "€4.45B (FY 2023/24)",
@@ -6041,6 +7622,7 @@ const acc27 = {
 };
 const acc28 = {
   ...emptyAccount(28, "LVM Versicherung"),
+  brandColor: "004B87",
   industry: "Insurance & Financial Services",
   priority: "Medium",
   revenue: "~€4.0B (2024 est. gross premiums)",
@@ -8772,14 +10354,14 @@ function ExecutiveMappingSection({ account, update, claudeApiKey }) {
     if (!claudeApiKey) { alert("Set your API key first."); return; }
     setDiscoveringTeam(true);
     try {
-      const prompt = "You are a sales intelligence analyst. Research \"" + account.companyName + "\" (industry: " + (account.industry || "unknown") + ") and find key people responsible for HR/People domains who would evaluate or implement an HR technology platform. Return ONLY valid JSON (no markdown):\n\n" + JSON.stringify({
+      const prompt = "You are a sales intelligence analyst with a 90% ACCURACY MANDATE. Research \"" + account.companyName + "\" (industry: " + (account.industry || "unknown") + ") and find key people responsible for HR/People domains who would evaluate or implement an HR technology platform. Return ONLY valid JSON (no markdown):\n\n" + JSON.stringify({
         teamMembers: [
-          { name: "Full Name", role: "HRIS", title: "Their exact current title", responsibility: "What they own", notes: "Verification source (LinkedIn/Xing/press)", linkedinUrl: "LinkedIn URL if found" },
-          { name: "Full Name", role: "Talent Acquisition", title: "Their exact current title", responsibility: "What they own", notes: "Verification source", linkedinUrl: "" },
-          { name: "Full Name", role: "Talent Management", title: "Their exact current title", responsibility: "What they own", notes: "Verification source", linkedinUrl: "" },
-          { name: "Full Name", role: "Workforce Planning", title: "Their exact current title", responsibility: "What they own", notes: "Verification source", linkedinUrl: "" },
+          { name: "Full Name", role: "HRIS", title: "Their exact current title", responsibility: "What they own", notes: "VERIFICATION: [LinkedIn/Xing/company website URL or specific source confirming current employment]", linkedinUrl: "LinkedIn URL if found" },
+          { name: "Full Name", role: "Talent Acquisition", title: "Their exact current title", responsibility: "What they own", notes: "VERIFICATION: [source]", linkedinUrl: "" },
+          { name: "Full Name", role: "Talent Management", title: "Their exact current title", responsibility: "What they own", notes: "VERIFICATION: [source]", linkedinUrl: "" },
+          { name: "Full Name", role: "Workforce Planning", title: "Their exact current title", responsibility: "What they own", notes: "VERIFICATION: [source]", linkedinUrl: "" },
         ]
-      }) + "\n\nCRITICAL RULES:\n1. ONLY include people VERIFIABLY CURRENTLY employed at " + account.companyName + ". Cross-reference LinkedIn, Xing, company website, and public sources.\n2. Each person MUST be findable on LinkedIn or Xing as currently working at " + account.companyName + ". If you cannot verify, SKIP them.\n3. Do NOT guess or fabricate names. Do NOT include people who may have left.\n4. In the notes field, state HOW you verified this person (e.g. 'LinkedIn profile confirms current role' or 'Listed on company leadership page').\n5. Better to return 2 verified people than 6 guessed names. Return 2-6 team members total.";
+      }) + "\n\n90% ACCURACY VERIFICATION PROTOCOL — MANDATORY:\n1. For EACH person, you MUST perform these verification steps BEFORE including them:\n   a) Search: \"{person name}\" site:linkedin.com \"" + account.companyName + "\" — confirm CURRENT role on LinkedIn\n   b) Search: \"{person name}\" site:xing.com \"" + account.companyName + "\" — cross-reference on Xing (for German companies)\n   c) Search: \"" + account.companyName + "\" Vorstand OR leadership OR management team — check official company website\n   d) Search: \"{person name}\" leaves OR departure OR wechselt \"" + account.companyName + "\" — check for exit news\n2. ONLY include a person if you can confirm them through AT LEAST 2 of the above sources.\n3. In the notes field, you MUST state: 'VERIFIED via [source 1] + [source 2]' with specific verification evidence.\n4. If you find ONLY 1 source, prefix their name with '⚠️ ' and note 'SINGLE SOURCE — verify before outreach'.\n5. If you CANNOT verify a person through any source, DO NOT INCLUDE THEM. Zero tolerance for guessing.\n6. Do NOT include people who left in the last 2 years — search for departure news explicitly.\n7. Better to return 1-2 VERIFIED people than 6 guessed names.\n8. Return 2-6 team members maximum. Each MUST have verification evidence in the notes field.";
 
       const resp = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -8851,19 +10433,29 @@ function ExecutiveMappingSection({ account, update, claudeApiKey }) {
     if (!claudeApiKey) { alert("Set your API key first (\uD83D\uDD11 button in header)"); return; }
     setEnrichingIdx(i);
     try {
-      const prompt = `You are a sales intelligence analyst. Research "${exec.name}"${exec.title ? ' (title: "' + exec.title + '")' : ""} at "${account.companyName}" (industry: ${account.industry || "unknown"}). Return ONLY valid JSON (no markdown) with all fields filled based on publicly available information. Use "" for fields you cannot find:
+      const prompt = `You are a sales intelligence analyst with a 90% ACCURACY MANDATE. Research "${exec.name}"${exec.title ? ' (title: "' + exec.title + '")' : ""} at "${account.companyName}" (industry: ${account.industry || "unknown"}).
+
+FIRST: Verify this person CURRENTLY works at ${account.companyName} by checking:
+  a) LinkedIn: "${exec.name}" site:linkedin.com "${account.companyName}"
+  b) Xing: "${exec.name}" site:xing.com "${account.companyName}"
+  c) Company website: "${account.companyName}" Vorstand OR management board
+  d) Departure: "${exec.name}" leaves OR verlässt "${account.companyName}"
+
+If you find evidence they DEPARTED, return: {"title": "DEPARTED — [their old title] (left [date] for [new company if known])", "background": "DEPARTED: [evidence of departure]", "department": "", "roleType": "", "priorities": "", "keyQuote": "", "relevance": "NO LONGER AT COMPANY", "outreachAngles": "DO NOT OUTREACH — verify replacement", "linkedinUrl": "", "reportsTo": ""}
+
+If CONFIRMED still at company, return ONLY valid JSON (no markdown):
 
 {
   "title": "Their exact current title at ${account.companyName}",
   "department": "One of: AI Strategy, Talent Management, Talent Acquisition, Workforce Management, HR Leadership, IT / Digital, Finance, Other",
   "roleType": "One of: Primary Sponsor, Key Influencer, Budget Authority, Tech Oversight, Compliance Gate, Integration Lead",
-  "background": "2-3 sentence career background including education, previous roles, and time at current company",
+  "background": "VERIFIED: [LinkedIn/Xing/company website]. 2-3 sentence career background",
   "priorities": "Their top 3-4 stated priorities or focus areas",
-  "keyQuote": "A real public quote if available, or empty string",
-  "relevance": "Why this person matters for an HR/talent technology deal — their decision-making power, influence, or budget authority",
-  "outreachAngles": "2 specific outreach angles to engage this person, based on their priorities and background",
-  "linkedinUrl": "LinkedIn profile URL if known (format: https://linkedin.com/in/...), or empty string",
-  "reportsTo": "Name of their direct manager/boss if known, or empty string"
+  "keyQuote": "A REAL public quote with source attribution, or empty string. NEVER fabricate.",
+  "relevance": "Why this person matters for an HR/talent technology deal",
+  "outreachAngles": "2 specific outreach angles based on verified priorities",
+  "linkedinUrl": "Actual LinkedIn URL (https://linkedin.com/in/...) or empty string",
+  "reportsTo": "Name of their direct manager if known, or empty string"
 }`;
 
       const resp = await fetch("https://api.anthropic.com/v1/messages", {
@@ -8923,14 +10515,24 @@ function ExecutiveMappingSection({ account, update, claudeApiKey }) {
   ]
 }
 
-CRITICAL RULES:
-1. ONLY include people who VERIFIABLY CURRENTLY work at ${account.companyName}. Cross-reference LinkedIn, Xing, company website, press releases, and public sources.
-2. Do NOT include anyone who has departed, left, or moved to another company. If you are not confident they are still there, do NOT include them.
-3. Each person MUST have their name findable on LinkedIn or Xing as currently working at ${account.companyName}. If you cannot verify this, SKIP them entirely.
-4. For keyQuote: only include REAL public quotes from conferences, interviews, LinkedIn posts, press releases. Include the source. Never fabricate quotes.
-5. For linkedinUrl: provide the actual LinkedIn profile URL (https://linkedin.com/in/...) whenever possible.
-6. If you cannot confirm someone is currently in a role, do NOT include them — better to return fewer verified people than guessed names.
-7. Return 4-8 executives total. Quality over quantity.`;
+90% ACCURACY VERIFICATION PROTOCOL — MANDATORY FOR EVERY PERSON:
+
+Before including ANY person, you MUST run these 4 verification checks:
+  a) LinkedIn: Search "{person name}" site:linkedin.com "${account.companyName}" — confirm their CURRENT title shows this company
+  b) Xing: Search "{person name}" site:xing.com "${account.companyName}" — cross-reference (especially for German companies)
+  c) Company website: Search "${account.companyName}" Vorstand OR Geschäftsführung OR leadership team OR management board — check official page
+  d) Departure check: Search "{person name}" leaves OR departure OR verlässt OR wechselt "${account.companyName}" — confirm NO exit news
+
+INCLUSION RULES:
+1. ONLY include a person if CONFIRMED via at least 2 of the 4 checks above.
+2. In the background field, you MUST state: "VERIFIED: [source 1] + [source 2]" — e.g. "VERIFIED: LinkedIn profile (current title matches) + listed on company management board page"
+3. If only 1 source confirms them, prefix name with "⚠️ " and note "SINGLE SOURCE — verify before outreach" in background.
+4. If you CANNOT verify through ANY source → DO NOT INCLUDE. Zero tolerance for guessing or fabricating names.
+5. Search for DEPARTURES explicitly — people who left in the last 24 months must NOT be included.
+6. For keyQuote: ONLY real public quotes with attribution (conference, press, LinkedIn post). Never fabricate. Use empty string if none found.
+7. For linkedinUrl: actual URL (https://linkedin.com/in/...) or empty string. Never guess URLs.
+8. Return 3-6 VERIFIED executives. 3 verified people >> 8 guessed names.
+9. If you cannot verify enough people, return fewer and note "Limited public executive data available for ${account.companyName}" in the first leader's background field.`;
 
       const resp = await fetch("https://api.anthropic.com/v1/messages", {
         method: "POST",
@@ -11780,7 +13382,7 @@ function BULeadersSection({ account, update, claudeApiKey }) {
       var resp = await fetchWithRetry("https://api.anthropic.com/v1/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-api-key": claudeApiKey, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" },
-        body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 3000, system: "You are a JSON API endpoint. You ONLY output valid JSON objects. Never include any text, explanation, or commentary outside the JSON.", messages: [{ role: "user", content: "Research current Business Unit leaders at \"" + account.companyName + "\" (" + (account.industry || "unknown") + "). Today is " + new Date().toISOString().split("T")[0] + ".\n\nInclude: division/BU heads, SVPs running business lines, procurement/vendor management leaders, and anyone with P&L responsibility. If you cannot verify a person, use your best knowledge but note it.\n\nReturn this exact JSON structure:\n{\"buLeaders\": [{\"name\": \"Full name\", \"title\": \"Current title\", \"bu\": \"Business Unit name\", \"mandate\": \"Their strategic mandate\", \"talentChallenge\": \"Their hiring challenge\", \"phenomAngle\": \"How to position Phenom\", \"linkedinUrl\": \"\"}]}" }, { role: "assistant", content: "{" }] }),
+        body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 3000, system: "You are a JSON API endpoint with a 90% ACCURACY MANDATE. You ONLY output valid JSON objects. Never include any text outside the JSON. For EVERY person you include, you must have verified them against at least 2 public sources (LinkedIn, Xing, company website, press). Never guess or fabricate names.", messages: [{ role: "user", content: "Research current Business Unit leaders at \"" + account.companyName + "\" (" + (account.industry || "unknown") + "). Today is " + new Date().toISOString().split("T")[0] + ".\n\nInclude: division/BU heads, SVPs running business lines, procurement/vendor management leaders, and anyone with P&L responsibility.\n\n90% ACCURACY VERIFICATION PROTOCOL:\n1. For EACH person, verify via: (a) LinkedIn: \"{name}\" site:linkedin.com \"" + account.companyName + "\" (b) Xing: \"{name}\" site:xing.com \"" + account.companyName + "\" (c) Company website: \"" + account.companyName + "\" Vorstand OR management board (d) Departure check: \"{name}\" leaves OR verlässt \"" + account.companyName + "\"\n2. ONLY include if confirmed via AT LEAST 2 sources. State sources in mandate field: 'VERIFIED: [source1] + [source2]'\n3. If only 1 source, prefix name with '⚠️ ' and note 'SINGLE SOURCE'\n4. If ZERO sources confirm → DO NOT INCLUDE. Never guess names.\n5. Search for departures explicitly — anyone who left in 24 months must NOT be included.\n6. Better to return 2-3 verified leaders than 6 guessed names.\n\nReturn this exact JSON structure:\n{\"buLeaders\": [{\"name\": \"Full name (VERIFIED)\", \"title\": \"Current title\", \"bu\": \"Business Unit name\", \"mandate\": \"VERIFIED: [LinkedIn + company website]. Their strategic mandate\", \"talentChallenge\": \"Their hiring challenge\", \"phenomAngle\": \"How to position Phenom\", \"linkedinUrl\": \"Actual LinkedIn URL or empty string\"}]}" }, { role: "assistant", content: "{" }] }),
       }, 3, function(msg) { setEnrichStatus(msg); });
       var data = await resp.json();
       var rawText = "{" + (data.content[0].text || "");
@@ -12910,12 +14512,23 @@ function ProspectDashboard() {
         // --- CALL 3: Key Signals + Executives array ---
         const p3 = `For "${acc.companyName}" (${acc.industry || "unknown"}), return ONLY valid JSON. Today is ${new Date().toISOString().split("T")[0]} — use CURRENT data only, verify all executives are CURRENTLY employed as of ${currentYear - 1}-${currentYear}.
 
-CRITICAL VERIFICATION RULES:
-- ONLY include executives who VERIFIABLY CURRENTLY work at ${acc.companyName}. Cross-reference LinkedIn, Xing, company website, press releases.
-- Each person MUST be findable on LinkedIn or Xing as currently employed at ${acc.companyName}. If you cannot verify, DO NOT include them.
-- Do NOT guess or fabricate names. Do NOT include people who may have left the company.
-- For keyQuote: ONLY include REAL public quotes from verifiable sources. Never fabricate quotes — use empty string if none found.
-- Better to return 3 verified executives than 8 guessed names.
+90% ACCURACY VERIFICATION PROTOCOL — MANDATORY FOR EVERY EXECUTIVE:
+
+Before including ANY person, you MUST run ALL 4 verification checks:
+  a) LinkedIn: Search "{person name}" site:linkedin.com "${acc.companyName}" — confirm CURRENT title shows this company
+  b) Xing: Search "{person name}" site:xing.com "${acc.companyName}" — cross-reference (especially for German/European companies)
+  c) Company website: Search "${acc.companyName}" Vorstand OR Geschäftsführung OR leadership OR management board — check official page
+  d) Departure check: Search "{person name}" leaves OR departure OR verlässt OR wechselt "${acc.companyName}" — confirm NO exit news
+
+INCLUSION RULES:
+- Include ONLY if confirmed via AT LEAST 2 of the 4 checks above.
+- In the background field, state: "VERIFIED: [source 1] + [source 2]" with specific evidence.
+- If only 1 source, prefix name with "⚠️ " and note "SINGLE SOURCE — verify before outreach".
+- If ZERO sources confirm a person → DO NOT INCLUDE. Zero tolerance for guessing or fabricating names.
+- Search for DEPARTURES explicitly — people who left in the last 24 months MUST NOT be included.
+- For keyQuote: ONLY real public quotes with source attribution. Never fabricate — use empty string if none found.
+- For linkedinUrl: actual URL or empty string. Never guess URLs.
+- Return 3-5 VERIFIED executives. 3 verified >> 8 guessed.
 
 {
   "keySignals": ["signal 1 about hiring/growth", "signal 2 about leadership", "signal 3 about tech/AI", "signal 4 about financials", "signal 5 about workforce", "signal 6 about transformation", "signal 7 about market position", "signal 8 about talent pressure"],
